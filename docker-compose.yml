@@ -1,0 +1,46 @@
+services:
+  omniclaw-gateway:
+    image: ${OMNICLAW_IMAGE:-omniclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OMNICLAW_GATEWAY_TOKEN: ${OMNICLAW_GATEWAY_TOKEN}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+    volumes:
+      - ${OMNICLAW_CONFIG_DIR}:/home/node/.omniclaw
+      - ${OMNICLAW_WORKSPACE_DIR}:/home/node/.omniclaw/workspace
+    ports:
+      - "${OMNICLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OMNICLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OMNICLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+
+  omniclaw-cli:
+    image: ${OMNICLAW_IMAGE:-omniclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OMNICLAW_GATEWAY_TOKEN: ${OMNICLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+    volumes:
+      - ${OMNICLAW_CONFIG_DIR}:/home/node/.omniclaw
+      - ${OMNICLAW_WORKSPACE_DIR}:/home/node/.omniclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]

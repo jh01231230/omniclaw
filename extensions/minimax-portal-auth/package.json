@@ -1,0 +1,14 @@
+{
+  "name": "@omniclaw/minimax-portal-auth",
+  "version": "2026.2.1",
+  "description": "OmniClaw MiniMax Portal OAuth provider plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

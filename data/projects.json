@@ -1,0 +1,233 @@
+{
+  "proj_c23d49e0": {
+    "id": "proj_c23d49e0",
+    "name": "项目管理工具",
+    "description": "我想做个项目管理工具",
+    "template": "web_app",
+    "phases": [
+      {
+        "name": "需求分析",
+        "status": "completed",
+        "start_date": null,
+        "end_date": "2026-02-11T20:02:39.683421",
+        "tasks": [
+          "收集需求",
+          "写文档",
+          "确认功能"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "原型设计",
+        "status": "completed",
+        "start_date": "2026-02-11T20:02:39.683466",
+        "end_date": "2026-02-11T20:02:39.690807",
+        "tasks": [
+          "画原型图",
+          "UI设计",
+          "用户确认"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "后端开发",
+        "status": "completed",
+        "start_date": "2026-02-11T20:02:39.690826",
+        "end_date": "2026-02-11T20:02:39.692346",
+        "tasks": [
+          "数据库设计",
+          "API开发",
+          "业务逻辑"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "前端开发",
+        "status": "completed",
+        "start_date": "2026-02-11T20:02:39.692362",
+        "end_date": "2026-02-11T20:02:39.693818",
+        "tasks": [
+          "页面开发",
+          "交互实现",
+          "API对接"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "测试",
+        "status": "completed",
+        "start_date": "2026-02-11T20:02:39.693834",
+        "end_date": "2026-02-11T20:02:39.695491",
+        "tasks": [
+          "功能测试",
+          "Bug修复"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "部署上线",
+        "status": "completed",
+        "start_date": "2026-02-11T20:02:39.695506",
+        "end_date": "2026-02-11T20:02:39.696958",
+        "tasks": [
+          "服务器部署",
+          "域名配置",
+          "上线发布"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      }
+    ],
+    "current_phase": 5,
+    "status": "completed",
+    "priority": 3,
+    "created_at": "2026-02-11T20:02:39.675196",
+    "updated_at": "2026-02-11T20:02:39.696981",
+    "start_date": "2026-02-11T20:02:39.675207",
+    "target_end_date": "2026-02-28T20:02:39.675077",
+    "context": {
+      "original_prompt": "我想做个项目管理工具"
+    },
+    "user_updates": [
+      {
+        "phase": "需求分析",
+        "type": "completed",
+        "content": "数据库设计完成，开始写代码",
+        "timestamp": "2026-02-11T20:02:39.683472"
+      },
+      {
+        "phase": "原型设计",
+        "type": "completed",
+        "content": "数据库设计完成，开始写代码",
+        "timestamp": "2026-02-11T20:02:39.690832"
+      },
+      {
+        "phase": "后端开发",
+        "type": "completed",
+        "content": "开始测试",
+        "timestamp": "2026-02-11T20:02:39.692368"
+      },
+      {
+        "phase": "前端开发",
+        "type": "completed",
+        "content": "开始测试",
+        "timestamp": "2026-02-11T20:02:39.693839"
+      },
+      {
+        "phase": "测试",
+        "type": "completed",
+        "content": "测试通过，准备部署",
+        "timestamp": "2026-02-11T20:02:39.695512"
+      },
+      {
+        "phase": "部署上线",
+        "type": "completed",
+        "content": "测试通过，准备部署",
+        "timestamp": "2026-02-11T20:02:39.696974"
+      }
+    ],
+    "ai_suggestions": []
+  },
+  "proj_dc4caca9": {
+    "id": "proj_dc4caca9",
+    "name": "项目管理工具",
+    "description": "我想做个项目管理工具",
+    "template": "web_app",
+    "phases": [
+      {
+        "name": "需求分析",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "收集需求",
+          "写文档",
+          "确认功能"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "原型设计",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "画原型图",
+          "UI设计",
+          "用户确认"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "后端开发",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "数据库设计",
+          "API开发",
+          "业务逻辑"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "前端开发",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "页面开发",
+          "交互实现",
+          "API对接"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "测试",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "功能测试",
+          "Bug修复"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      },
+      {
+        "name": "部署上线",
+        "status": "pending",
+        "start_date": null,
+        "end_date": null,
+        "tasks": [
+          "服务器部署",
+          "域名配置",
+          "上线发布"
+        ],
+        "completed_tasks": [],
+        "notes": ""
+      }
+    ],
+    "current_phase": 0,
+    "status": "active",
+    "priority": 3,
+    "created_at": "2026-02-11T20:02:39.677672",
+    "updated_at": "2026-02-11T20:02:39.677678",
+    "start_date": "2026-02-11T20:02:39.677683",
+    "target_end_date": "2026-02-28T20:02:39.677629",
+    "context": {
+      "original_prompt": "我想做个项目管理工具"
+    },
+    "user_updates": [],
+    "ai_suggestions": []
+  }
+}

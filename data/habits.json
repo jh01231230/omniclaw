@@ -1,0 +1,25 @@
+{
+  "habit_8bba0650": {
+    "id": "habit_8bba0650",
+    "name": "健身",
+    "category": "fitness",
+    "description": "培养健身习惯",
+    "frequency": "daily",
+    "target_value": 30,
+    "unit": "分钟",
+    "reminder_times": [
+      "07:00",
+      "18:00"
+    ],
+    "start_date": "2026-02-11T20:12:37.041921",
+    "status": "cancelled",
+    "streak": 0,
+    "longest_streak": 0,
+    "total_completed": 0,
+    "last_completed_date": null,
+    "created_at": "2026-02-11T20:12:37.041952",
+    "updated_at": "2026-02-11T20:12:37.041958",
+    "stop_date": "2026-02-11T20:12:37.045791",
+    "cancel_reason": "用户主动停止"
+  }
+}

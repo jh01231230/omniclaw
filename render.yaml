@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: omniclaw
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: SETUP_PASSWORD
+        sync: false
+      - key: OMNICLAW_STATE_DIR
+        value: /data/.omniclaw
+      - key: OMNICLAW_WORKSPACE_DIR
+        value: /data/workspace
+      - key: OMNICLAW_GATEWAY_TOKEN
+        generateValue: true
+    disk:
+      name: omniclaw-data
+      mountPath: /data
+      sizeGB: 1

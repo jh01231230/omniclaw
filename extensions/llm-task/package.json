@@ -1,0 +1,14 @@
+{
+  "name": "@omniclaw/llm-task",
+  "version": "2026.2.1",
+  "description": "OmniClaw JSON-only LLM task plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

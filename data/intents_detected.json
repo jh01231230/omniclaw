@@ -1,0 +1,12 @@
+[
+  {
+    "intent_type": "project",
+    "content": "项目管理工具",
+    "confidence": 0.7999999999999999,
+    "context": "用户: 我想做个项目管理工具",
+    "created_at": "2026-02-11T19:48:05.254926",
+    "source": "user",
+    "id": "intent_6060b6af",
+    "related_todo_id": "todo_757e5c43"
+  }
+]

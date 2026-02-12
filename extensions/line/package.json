@@ -1,0 +1,29 @@
+{
+  "name": "@omniclaw/line",
+  "version": "2026.2.1",
+  "description": "OmniClaw LINE channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "line",
+      "label": "LINE",
+      "selectionLabel": "LINE (Messaging API)",
+      "docsPath": "/channels/line",
+      "docsLabel": "line",
+      "blurb": "LINE Messaging API bot for Japan/Taiwan/Thailand markets.",
+      "order": 75,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "@omniclaw/line",
+      "localPath": "extensions/line",
+      "defaultChoice": "npm"
+    }
+  }
+}

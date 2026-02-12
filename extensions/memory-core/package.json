@@ -1,0 +1,17 @@
+{
+  "name": "@omniclaw/memory-core",
+  "version": "2026.2.1",
+  "description": "OmniClaw core memory search plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "peerDependencies": {
+    "omniclaw": ">=2026.1.26"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

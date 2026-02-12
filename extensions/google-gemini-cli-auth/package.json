@@ -1,0 +1,14 @@
+{
+  "name": "@omniclaw/google-gemini-cli-auth",
+  "version": "2026.2.1",
+  "description": "OmniClaw Gemini CLI OAuth provider plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

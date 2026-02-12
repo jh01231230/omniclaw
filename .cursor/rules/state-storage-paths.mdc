@@ -1,0 +1,18 @@
+---
+description: Runtime state and config path conventions
+globs: ["src/**/*.ts", "scripts/**/*"]
+alwaysApply: true
+---
+
+# Runtime State and Config Paths
+
+- Store all runtime artifacts and user config **outside** the git repository.
+- Use `~/.omniclaw` as the default state root for new code.
+- Never introduce new default writes under repo-local paths like `./data`, `./memory`, or workspace root internals.
+- Prefer existing helpers (`resolveStateDir`, `resolveConfigPath`, related path utilities) instead of hardcoding state paths.
+
+## When Adding New Files or Caches
+
+- Put them under `OMNICLAW_STATE_DIR` (or its resolved default `~/.omniclaw`).
+- Ensure parent directories are created safely (`mkdir` with recursive mode) before writing.
+- Keep user-facing help text and docs aligned with `~/.omniclaw`.

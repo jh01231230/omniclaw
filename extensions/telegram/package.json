@@ -1,0 +1,14 @@
+{
+  "name": "@omniclaw/telegram",
+  "version": "2026.2.1",
+  "description": "OmniClaw Telegram channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "omniclaw": "workspace:*"
+  },
+  "omniclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
