@@ -8,9 +8,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-**OmniClaw** is a self-hosted personal AI assistant you run on your own devices. It answers you on the channels you already use: WhatsApp, Telegram, Slack, Discord, Signal, iMessage, and more. The Gateway is the control plane — the product is the assistant.
+**OmniClaw** is a deep-customized version of `OpenClaw`, rebuilt with the enhanced capabilities, security reinforcement, a cleaner onboarding/configuration experience, and multi-channel automation.
 
-If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
+It is a self-hosted personal AI assistant you run on your own devices. It answers you on the channels you already use: WhatsApp, Telegram, Slack, Discord, Signal, iMessage, and more. The Gateway is the control plane, and the product is the assistant.
+
+OmniClaw is designed to be efficient, secure, modular, and production-friendly for serious self-hosted AI assistant deployments. If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
 
 ---
 
@@ -57,6 +59,17 @@ OMNICLAW_FORCE_BUILD=1 pnpm omniclaw completion --install --shell bash --yes
 **Dev loop** (auto-reload on changes):
 ```bash
 pnpm gateway:watch
+```
+
+### Convenience scripts
+
+- **`./start.sh`** — Quick launcher: checks Node.js, installs deps and builds if needed, then starts the gateway on port 18789. Use when you want to run OmniClaw directly without systemd.
+- **`./install-system-service.sh`** — Installs OmniClaw as a systemd service (`omniclaw-gateway`). Requires sudo. Auto-detects `$USER`, script directory, and Node.js path. Creates `/etc/systemd/system/omniclaw-gateway.service` and enables/starts it.
+
+```bash
+./start.sh
+# or, to run as a system service:
+sudo ./install-system-service.sh
 ```
 
 ---
@@ -157,6 +170,13 @@ src/
 ├── wizard/        # Onboarding wizard
 └── ...
 ```
+
+---
+
+## Acknowledgments
+
+- Original OpenClaw project: https://github.com/openclaw/openclaw
+- Special thanks to the original OpenClaw author for creating the foundation and vision that made OmniClaw possible.
 
 ---
 
