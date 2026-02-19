@@ -1,8 +1,10 @@
 import type { DaemonLifecycleOptions } from "./types.js";
+import { loadConfig, resolveGatewayPort } from "../../config/config.js";
 import { resolveIsNixMode } from "../../config/paths.js";
 import { resolveGatewayService } from "../../daemon/service.js";
 import { renderSystemdUnavailableHints } from "../../daemon/systemd-hints.js";
 import { isSystemdUserServiceAvailable } from "../../daemon/systemd.js";
+import { cleanupOrphanGatewayProcesses } from "../../infra/gateway-startup-cleanup.js";
 import { isWSL } from "../../infra/wsl.js";
 import { defaultRuntime } from "../../runtime.js";
 import { buildDaemonServiceSnapshot, createNullWriter, emitDaemonActionJson } from "./response.js";
@@ -142,6 +144,9 @@ export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
     return;
   }
   try {
+    const cfg = loadConfig();
+    const port = resolveGatewayPort(cfg, process.env);
+    await cleanupOrphanGatewayProcesses(port, process.env);
     await service.restart({ env: process.env, stdout });
   } catch (err) {
     const hints = renderGatewayServiceStartHints();
@@ -212,6 +217,9 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
     return;
   }
   try {
+    const cfg = loadConfig();
+    const port = resolveGatewayPort(cfg, process.env);
+    await cleanupOrphanGatewayProcesses(port, process.env);
     await service.stop({ env: process.env, stdout });
   } catch (err) {
     fail(`Gateway stop failed: ${String(err)}`);
@@ -298,6 +306,9 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
     return false;
   }
   try {
+    const cfg = loadConfig();
+    const port = resolveGatewayPort(cfg, process.env);
+    await cleanupOrphanGatewayProcesses(port, process.env);
     await service.restart({ env: process.env, stdout });
     let restarted = true;
     try {

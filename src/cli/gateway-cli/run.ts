@@ -13,6 +13,7 @@ import { startGatewayServer } from "../../gateway/server.js";
 import { setGatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setVerbose } from "../../globals.js";
 import { GatewayLockError } from "../../infra/gateway-lock.js";
+import { cleanupOrphanGatewayProcesses } from "../../infra/gateway-startup-cleanup.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../../infra/ports.js";
 import { setConsoleSubsystemFilter, setConsoleTimestampPrefix } from "../../logging/console.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -258,6 +259,12 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   }
 
   try {
+    const { killed, locksRemoved } = await cleanupOrphanGatewayProcesses(port);
+    if (killed > 0 || locksRemoved > 0) {
+      gatewayLog.info(
+        `cleanup: killed ${killed} orphan gateway process(es), removed ${locksRemoved} stale lock(s)`,
+      );
+    }
     await runGatewayLoop({
       runtime: defaultRuntime,
       start: async () =>
