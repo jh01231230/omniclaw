@@ -270,6 +270,14 @@ export async function ensureWorkspaceAndSessions(
   runtime.log(`Sessions OK: ${shortenHomePath(sessionsDir)}`);
 }
 
+export async function ensureMemoryDir(runtime: RuntimeEnv): Promise<string> {
+  const home = process.env.HOME || os.homedir();
+  const memoryDir = path.join(home, ".omniclaw", "memory");
+  await fs.mkdir(memoryDir, { recursive: true });
+  runtime.log(`Memory OK: ${shortenHomePath(memoryDir)}`);
+  return memoryDir;
+}
+
 export function resolveNodeManagerOptions(): Array<{
   value: NodeManagerChoice;
   label: string;

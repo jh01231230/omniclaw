@@ -29,6 +29,7 @@ import {
   summarizeExistingConfig,
 } from "../commands/onboard-helpers.js";
 import { setupInternalHooks } from "../commands/onboard-hooks.js";
+import { promptMemoryDeployment, applyMemoryDeploymentConfig, initializeCredentialsPartition } from "./onboarding.memory.js";
 import { promptRemoteGatewayConfig } from "../commands/onboard-remote.js";
 import { setupSkills } from "../commands/onboard-skills.js";
 import {
@@ -478,6 +479,23 @@ export async function runOnboardingWizard(
 
   // Setup hooks (session memory on /new)
   nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);
+
+  // Setup memory deployment (minimal vs full PostgreSQL)
+  if (!(opts.skipMemory ?? false)) {
+    const memoryConfig = await promptMemoryDeployment(prompter, runtime);
+    nextConfig = applyMemoryDeploymentConfig(nextConfig, memoryConfig);
+    
+    // Create memory directory for minimal deployment
+    if (memoryConfig.type === "minimal") {
+      const { ensureMemoryDir } = await import("../commands/onboard-helpers.js");
+      await ensureMemoryDir(runtime);
+    }
+    
+    // Initialize credentials partition if requested
+    if (memoryConfig.type === "full" && memoryConfig.enableCredentials && memoryConfig.postgresql) {
+      await initializeCredentialsPartition(memoryConfig.postgresql, runtime);
+    }
+  }
 
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
