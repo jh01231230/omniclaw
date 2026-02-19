@@ -233,10 +233,12 @@ function auditGatewayServicePath(
     return;
   }
   const servicePath = command?.environment?.PATH;
-  if (!servicePath) {
+  if (!servicePath || !servicePath.trim()) {
     issues.push({
       code: SERVICE_AUDIT_CODES.gatewayPathMissing,
       message: "Gateway service PATH is not set; the daemon should use a minimal PATH.",
+      detail:
+        "Run `omniclaw doctor` and confirm the repair to reinstall with a minimal PATH, or `omniclaw gateway install --force`.",
       level: "recommended",
     });
     return;

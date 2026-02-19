@@ -173,6 +173,73 @@ function resolveGatewayLockPath(env: NodeJS.ProcessEnv) {
   return { lockPath, configPath };
 }
 
+/**
+ * Remove stale gateway lock files before acquiring.
+ * A lock is stale if the owning process is dead or the file is older than staleMs.
+ * Called automatically at the start of acquireGatewayLock to avoid startup failures
+ * after a crashed service leaves behind a lock file.
+ */
+export async function removeStaleGatewayLocks(
+  opts: Pick<GatewayLockOptions, "env" | "platform" | "staleMs"> = {},
+): Promise<number> {
+  const env = opts.env ?? process.env;
+  const platform = opts.platform ?? process.platform;
+  const staleMs = opts.staleMs ?? DEFAULT_STALE_MS;
+
+  if (env.OMNICLAW_ALLOW_MULTI_GATEWAY === "1" || env.VITEST || env.NODE_ENV === "test") {
+    return 0;
+  }
+
+  const lockDir = resolveGatewayLockDir();
+  let removed = 0;
+
+  try {
+    const entries = await fs.readdir(lockDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.startsWith("gateway.") || !entry.name.endsWith(".lock")) {
+        continue;
+      }
+      const lockPath = path.join(lockDir, entry.name);
+      const payload = await readLockPayload(lockPath);
+      const ownerPid = payload?.pid;
+      const ownerStatus =
+        typeof ownerPid === "number"
+          ? resolveGatewayOwnerStatus(ownerPid, payload, platform)
+          : "unknown";
+
+      let shouldRemove = ownerStatus === "dead";
+      if (!shouldRemove && ownerStatus !== "alive") {
+        let stale = false;
+        if (payload?.createdAt) {
+          const createdAt = Date.parse(payload.createdAt);
+          stale = Number.isFinite(createdAt) ? Date.now() - createdAt > staleMs : false;
+        }
+        if (!stale) {
+          try {
+            const st = await fs.stat(lockPath);
+            stale = Date.now() - st.mtimeMs > staleMs;
+          } catch {
+            stale = true;
+          }
+        }
+        shouldRemove = stale;
+      }
+
+      if (shouldRemove) {
+        await fs.rm(lockPath, { force: true });
+        removed += 1;
+      }
+    }
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code !== "ENOENT") {
+      throw err;
+    }
+  }
+
+  return removed;
+}
+
 export async function acquireGatewayLock(
   opts: GatewayLockOptions = {},
 ): Promise<GatewayLockHandle | null> {
@@ -191,6 +258,8 @@ export async function acquireGatewayLock(
   const platform = opts.platform ?? process.platform;
   const { lockPath, configPath } = resolveGatewayLockPath(env);
   await fs.mkdir(path.dirname(lockPath), { recursive: true });
+
+  await removeStaleGatewayLocks({ env, platform, staleMs });
 
   const startedAt = Date.now();
   let lastPayload: LockPayload | null = null;

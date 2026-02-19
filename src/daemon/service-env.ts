@@ -138,7 +138,13 @@ export function buildMinimalServicePath(options: BuildServicePathOptions = {}): 
     return env.PATH ?? "";
   }
 
-  return getMinimalServicePathPartsFromEnv({ ...options, env }).join(path.posix.delimiter);
+  const parts = getMinimalServicePathPartsFromEnv({ ...options, env });
+  const result = parts.join(path.posix.delimiter);
+  // Fallback: daemon must always have a minimal PATH (audit expects it)
+  if (!result.trim()) {
+    return resolveSystemPathDirs(platform).join(path.posix.delimiter);
+  }
+  return result;
 }
 
 export function buildServiceEnvironment(params: {

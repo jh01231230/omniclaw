@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { resolveConfigPath, resolveGatewayLockDir, resolveStateDir } from "../config/paths.js";
-import { acquireGatewayLock, GatewayLockError } from "./gateway-lock.js";
+import { acquireGatewayLock, GatewayLockError, removeStaleGatewayLocks } from "./gateway-lock.js";
 
 async function makeEnv() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "omniclaw-gateway-lock-"));
@@ -182,6 +182,25 @@ describe("gateway lock", () => {
 
     await lock?.release();
     staleSpy.mockRestore();
+    await cleanup();
+  });
+
+  it("removeStaleGatewayLocks removes locks whose owner process is dead", async () => {
+    const { env, cleanup } = await makeEnv();
+    const { lockPath } = resolveLockPath(env);
+    const payload = {
+      pid: 99999,
+      createdAt: new Date().toISOString(),
+      configPath: env.OMNICLAW_CONFIG_PATH,
+    };
+    await fs.writeFile(lockPath, JSON.stringify(payload), "utf8");
+
+    const removed = await removeStaleGatewayLocks({
+      env: { ...env, VITEST: undefined, NODE_ENV: undefined },
+      platform: "linux",
+    });
+    expect(removed).toBe(1);
+    await expect(fs.access(lockPath)).rejects.toThrow();
     await cleanup();
   });
 });
