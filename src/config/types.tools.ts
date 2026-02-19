@@ -429,6 +429,15 @@ export type ToolsConfig = {
     /** Approved senders for /elevated (per-provider allowlists). */
     allowFrom?: AgentElevatedAllowFromConfig;
   };
+  /** Sudo/root password policy for commands that need elevation. Set during onboard. */
+  sudo?: {
+    /**
+     * - `never`: do not store or use sudo password.
+     * - `consent`: store password; use only after explicit user approval in chat each time.
+     * - `always`: store password; use automatically when needed (no per-use prompt).
+     */
+    mode?: "never" | "consent" | "always";
+  };
   /** Exec tool defaults. */
   exec?: ExecToolConfig;
   /** Sub-agent tool policy defaults (deny wins). */

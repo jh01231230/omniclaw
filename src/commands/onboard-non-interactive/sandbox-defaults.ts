@@ -26,6 +26,7 @@ export function applyNonInteractiveSandboxDefaults(nextConfig: OmniClawConfig): 
         ...nextConfig.tools?.exec,
         host: "sandbox",
       },
+      sudo: nextConfig.tools?.sudo ?? { mode: "never" },
     },
     agents: {
       ...prevAgents,

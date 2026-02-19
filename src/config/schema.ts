@@ -179,6 +179,7 @@ const FIELD_LABELS: Record<string, string> = {
   "tools.exec.security": "Exec Security",
   "tools.exec.ask": "Exec Ask",
   "tools.exec.node": "Exec Node Binding",
+  "tools.sudo.mode": "Sudo Password Policy",
   "tools.exec.pathPrepend": "Exec PATH Prepend",
   "tools.exec.safeBins": "Exec Safe Bins",
   "tools.message.allowCrossContextSend": "Allow Cross-Context Messaging",
@@ -429,6 +430,8 @@ const FIELD_HELP: Record<string, string> = {
   "tools.exec.pathPrepend": "Directories to prepend to PATH for exec runs (gateway/sandbox).",
   "tools.exec.safeBins":
     "Allow stdin-only safe binaries to run without explicit allowlist entries.",
+  "tools.sudo.mode":
+    "Sudo/root password policy: never (do not use), consent (ask in chat each time), always (use stored password automatically). Set during omniclaw onboard.",
   "tools.message.allowCrossContextSend":
     "Legacy override: allow cross-context sends across all providers.",
   "tools.message.crossContext.allowWithinProvider":

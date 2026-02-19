@@ -44,6 +44,7 @@ import { finalizeOnboardingWizard } from "./onboarding.finalize.js";
 import { configureGatewayForOnboarding } from "./onboarding.gateway-config.js";
 import { applyOnboardingSandboxSelection } from "./onboarding.sandbox.js";
 import { ensureOnboardingShellWrapper } from "./onboarding.shell.js";
+import { applyOnboardingSudoSelection } from "./onboarding.sudo.js";
 import { WizardCancelledError, type WizardPrompter } from "./prompts.js";
 
 async function requireRiskAcknowledgement(params: {
@@ -391,6 +392,7 @@ export async function runOnboardingWizard(
   };
 
   nextConfig = await applyOnboardingSandboxSelection({ nextConfig, prompter });
+  nextConfig = await applyOnboardingSudoSelection({ nextConfig, prompter });
 
   const authStore = ensureAuthProfileStore(undefined, {
     allowKeychainPrompt: false,

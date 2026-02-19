@@ -507,6 +507,12 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
+    sudo: z
+      .object({
+        mode: z.enum(["never", "consent", "always"]).optional(),
+      })
+      .strict()
+      .optional(),
     exec: z
       .object({
         host: z.enum(["sandbox", "gateway", "node"]).optional(),
