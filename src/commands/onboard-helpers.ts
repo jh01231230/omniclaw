@@ -1,6 +1,7 @@
 import { cancel, isCancel } from "@clack/prompts";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { inspect } from "node:util";
 import type { OmniClawConfig } from "../config/config.js";

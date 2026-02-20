@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
+import type { OmniClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "./prompts.js";
-import type { OmniClawConfig } from "../config/config.js";
 import { defaultRuntime } from "../runtime.js";
 
 export type MemoryDeploymentType = "minimal" | "full";
@@ -27,9 +27,9 @@ export async function initializeCredentialsPartition(
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
   const { host, port, database, user, password } = pgConfig;
-  
+
   const env = { ...process.env, PGPASSWORD: password || "" };
-  
+
   try {
     // Create credentials table
     const createTableSQL = `
@@ -52,7 +52,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_credentials_unique ON credentials(category
 
     execSync(
       `psql -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "${createTableSQL}"`,
-      { env, stdio: "pipe" }
+      { env, stdio: "pipe" },
     );
 
     runtime.log(`Credentials partition created in ${database}`);
@@ -72,7 +72,7 @@ export async function promptCredentialsSetup(
 ): Promise<boolean> {
   const setup = await prompter.confirm({
     message: "Create secure credentials partition?",
-    hint: "Store sudo passwords, API keys, server credentials encrypted",
+
     initialValue: true,
   });
 
@@ -127,7 +127,7 @@ export async function ensurePostgreSQL(
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
   const pgCheck = await checkPostgreSQLInstallation();
-  
+
   if (pgCheck.installed && pgCheck.versionNumber && pgCheck.versionNumber >= 17) {
     await prompter.note(`PostgreSQL ${pgCheck.version} found.`, "PostgreSQL");
     return true;
@@ -176,7 +176,7 @@ export async function promptMemoryDeployment(
     initialValue: "minimal",
   });
 
-  const config: MemoryDeploymentConfig = { type };
+  const config: MemoryDeploymentConfig = { type: type as MemoryDeploymentType };
 
   // For full deployment, check PostgreSQL installation
   if (type === "full") {
@@ -271,14 +271,18 @@ export function applyMemoryDeploymentConfig(
     }
   }
 
+  const agents = baseConfig.agents ?? {};
+  const defaults = agents.defaults ?? {};
+  const memorySearch = defaults.memorySearch ?? {};
+
   return {
     ...baseConfig,
     agents: {
-      ...baseConfig.agents,
+      ...agents,
       defaults: {
-        ...baseConfig.agents?.defaults,
+        ...defaults,
         memorySearch: {
-          ...(baseConfig.agents?.defaults as Record<string, unknown>)?.memorySearch,
+          ...memorySearch,
           ...memorySettings,
         },
       },
