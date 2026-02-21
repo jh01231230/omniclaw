@@ -1,6 +1,10 @@
 import type { HookHandler, InternalHookEvent } from "../../hooks.js";
-
-const TARS_MEMORY_SCRIPT = "/home/tars/Workspace/scripts/tars-memory-auto.sh";
+import { loadConfig } from "../../config/config.js";
+import {
+  startPostgreSQL,
+  checkPostgreSQLStatus,
+  type PostgreSQLConfig,
+} from "../../memory/postgresql-manager.js";
 
 const startTarsMemory: HookHandler = async (event: InternalHookEvent) => {
   // Only run on gateway startup
@@ -8,19 +12,46 @@ const startTarsMemory: HookHandler = async (event: InternalHookEvent) => {
     return;
   }
 
-  // Check if deployment is "full" (PostgreSQL)
-  // This hook will auto-start TARS Memory services regardless
-  // as it's needed for the database
+  // Load config to check memory settings
+  const cfg = loadConfig();
+  const memorySearch = cfg.agents?.defaults?.memorySearch;
 
-  try {
-    const { execSync } = await import("node:child_process");
-    const result = execSync(`${TARS_MEMORY_SCRIPT} start`, {
-      encoding: "utf-8",
-      timeout: 30000,
-    });
-    console.log("[tars-memory] Auto-started:", result);
-  } catch (err) {
-    console.error("[tars-memory] Failed to auto-start:", err);
+  // Check if full deployment with PostgreSQL
+  if (memorySearch?.deployment !== "full") {
+    return; // Not using PostgreSQL, skip
+  }
+
+  const postgresqlConfig = memorySearch.postgresql;
+
+  // Check if autoStart is enabled
+  if (!postgresqlConfig?.autoStart) {
+    console.log("[tars-memory] Auto-start disabled in config");
+    return;
+  }
+
+  // Check PostgreSQL status first
+  const pgConfig: PostgreSQLConfig = {
+    installPath: postgresqlConfig.installPath,
+    dataPath: postgresqlConfig.dataPath,
+    port: postgresqlConfig.port,
+  };
+
+  const status = checkPostgreSQLStatus(pgConfig);
+  console.log("[tars-memory] Status:", status);
+
+  if (status.running) {
+    console.log("[tars-memory] PostgreSQL already running");
+    return;
+  }
+
+  // Try to start PostgreSQL
+  console.log("[tars-memory] Starting PostgreSQL...");
+  const result = startPostgreSQL(pgConfig);
+
+  if (result.success) {
+    console.log("[tars-memory] PostgreSQL started successfully");
+  } else {
+    console.error("[tars-memory] Failed to start PostgreSQL:", result.error);
   }
 };
 

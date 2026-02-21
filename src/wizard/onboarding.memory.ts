@@ -15,6 +15,9 @@ export interface MemoryDeploymentConfig {
     database: string;
     user: string;
     password: string;
+    installPath?: string; // Path to PostgreSQL installation
+    dataPath?: string; // Path to data directory
+    autoStart?: boolean; // Auto-start on gateway boot
   };
   dataPath?: string; // For minimal: ~/.omniclaw/memory; For full: custom PostgreSQL path
 }
@@ -231,7 +234,31 @@ export async function promptMemoryDeployment(
         database: "openclaw_memory",
         user: "postgres",
         password: "",
+        installPath: "/media/tars/TARS_MEMORY/postgresql-installed",
+        dataPath: "/media/tars/TARS_MEMORY/postgresql/data",
+        autoStart: true,
       };
+    }
+
+    // Prompt for PostgreSQL paths and auto-start
+    if (config.postgresql) {
+      const installPath = await prompter.text({
+        message: "PostgreSQL installation path",
+        initialValue:
+          config.postgresql.installPath || "/media/tars/TARS_MEMORY/postgresql-installed",
+      });
+      const dataPath = await prompter.text({
+        message: "PostgreSQL data directory path",
+        initialValue: config.postgresql.dataPath || "/media/tars/TARS_MEMORY/postgresql/data",
+      });
+      const autoStart = await prompter.confirm({
+        message: "Auto-start PostgreSQL on gateway boot?",
+        initialValue: true,
+      });
+
+      config.postgresql.installPath = installPath;
+      config.postgresql.dataPath = dataPath;
+      config.postgresql.autoStart = autoStart;
     }
 
     // Prompt for credentials partition
@@ -265,6 +292,20 @@ export function applyMemoryDeploymentConfig(
       user: memoryConfig.postgresql.user,
       password: memoryConfig.postgresql.password,
     };
+
+    // Store PostgreSQL management settings
+    if (
+      memoryConfig.postgresql.installPath ||
+      memoryConfig.postgresql.dataPath ||
+      memoryConfig.postgresql.autoStart !== undefined
+    ) {
+      memorySettings.postgresql = {
+        installPath: memoryConfig.postgresql.installPath,
+        dataPath: memoryConfig.postgresql.dataPath,
+        autoStart: memoryConfig.postgresql.autoStart,
+      };
+    }
+
     // Store credentials flag in config
     if (memoryConfig.enableCredentials !== undefined) {
       memorySettings.enableCredentials = memoryConfig.enableCredentials;

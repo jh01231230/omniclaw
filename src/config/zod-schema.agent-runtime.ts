@@ -309,6 +309,16 @@ export const MemorySearchSchema = z
   .object({
     enabled: z.boolean().optional(),
     deployment: z.union([z.literal("minimal"), z.literal("full")]).optional(),
+    // PostgreSQL management for "full" deployment
+    postgresql: z
+      .object({
+        installPath: z.string().optional(), // Path to PostgreSQL installation
+        dataPath: z.string().optional(), // Path to data directory
+        port: z.number().int().positive().optional(), // PostgreSQL port
+        autoStart: z.boolean().optional(), // Auto-start on gateway boot
+      })
+      .strict()
+      .optional(),
     sources: z.array(z.union([z.literal("memory"), z.literal("sessions")])).optional(),
     extraPaths: z.array(z.string()).optional(),
     experimental: z
