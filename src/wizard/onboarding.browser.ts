@@ -18,7 +18,6 @@ export async function promptBrowserSetup(
 ): Promise<BrowserConfig> {
   const enabled = await prompter.confirm({
     message: "Enable browser automation?",
-    hint: "Headless Chrome for web browsing, automation",
     initialValue: true,
   });
 
