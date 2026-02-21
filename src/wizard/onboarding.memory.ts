@@ -97,6 +97,74 @@ export async function promptCredentialsSetup(
 }
 
 /**
+ * Initialize full memory schema (long_term_memory, distilled_experience, memory_metadata)
+ * Requires pgvector extension to be installed
+ */
+export async function initializeMemorySchema(
+  pgConfig: { host: string; port: number; database: string; user: string; password?: string },
+  runtime: RuntimeEnv = defaultRuntime,
+): Promise<boolean> {
+  const { host, port, database, user, password } = pgConfig;
+  const env = { ...process.env, PGPASSWORD: password || "" };
+
+  try {
+    const schemaSQL = `
+DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; EXCEPTION WHEN duplicate_object THEN null; END
+$$;
+
+CREATE TABLE IF NOT EXISTS long_term_memory (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    content TEXT NOT NULL,
+    embedding VECTOR(1536),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW(),
+    importance_score FLOAT DEFAULT 0.5,
+    detail_level VARCHAR(20) DEFAULT 'detail'
+);
+
+CREATE INDEX IF NOT EXISTS idx_long_term_memory_embedding 
+ON long_term_memory USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+
+CREATE TABLE IF NOT EXISTS distilled_experience (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pattern TEXT NOT NULL,
+    context_pattern TEXT,
+    success_rate FLOAT DEFAULT 0.5,
+    times_used INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_used TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS memory_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    memory_id UUID REFERENCES long_term_memory(id) ON DELETE CASCADE,
+    source_session UUID,
+    tags JSONB DEFAULT '[]',
+    last_accessed TIMESTAMP DEFAULT NOW(),
+    access_count INT DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_metadata_session ON memory_metadata (source_session);
+CREATE INDEX IF NOT EXISTS idx_memory_metadata_tags ON memory_metadata USING gin (tags);
+`.replace(/\n/g, " ");
+
+    execSync(`psql -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "${schemaSQL}"`, {
+      env,
+      stdio: "pipe",
+    });
+
+    runtime.log(`Memory schema initialized in ${database}`);
+    return true;
+  } catch (error) {
+    runtime.error(`Failed to initialize memory schema: ${error}`);
+    runtime.warn(
+      `If pgvector not installed, run: cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git && cd pgvector && make PG_CONFIG=/path/to/pg_config && sudo make install`,
+    );
+    return false;
+  }
+}
+
+/**
  * Check if PostgreSQL is installed and meets minimum version requirement (17+)
  */
 export async function checkPostgreSQLInstallation(): Promise<{
@@ -263,6 +331,23 @@ export async function promptMemoryDeployment(
 
     // Prompt for credentials partition
     config.enableCredentials = await promptCredentialsSetup(prompter, runtime);
+
+    // Initialize full memory schema (long_term_memory, etc.)
+    // This requires PostgreSQL to be running and pgvector installed
+    try {
+      await initializeMemorySchema(
+        {
+          host: config.postgresql.host,
+          port: config.postgresql.port,
+          database: config.postgresql.database,
+          user: config.postgresql.user,
+          password: config.postgresql.password,
+        },
+        runtime,
+      );
+    } catch (err) {
+      runtime.warn(`Memory schema initialization skipped: ${err}`);
+    }
   }
 
   return config;
