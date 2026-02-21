@@ -88,6 +88,7 @@ export type OnboardOptions = {
   skipProviders?: boolean;
   skipSkills?: boolean;
   skipMemory?: boolean;
+  skipBrowser?: boolean;
   skipHealth?: boolean;
   skipUi?: boolean;
   nodeManager?: NodeManagerChoice;

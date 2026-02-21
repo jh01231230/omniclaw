@@ -29,7 +29,6 @@ import {
   summarizeExistingConfig,
 } from "../commands/onboard-helpers.js";
 import { setupInternalHooks } from "../commands/onboard-hooks.js";
-import { promptMemoryDeployment, applyMemoryDeploymentConfig, initializeCredentialsPartition } from "./onboarding.memory.js";
 import { promptRemoteGatewayConfig } from "../commands/onboard-remote.js";
 import { setupSkills } from "../commands/onboard-skills.js";
 import {
@@ -41,8 +40,14 @@ import {
 import { logConfigUpdated } from "../config/logging.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
+import { promptBrowserSetup, applyBrowserConfig } from "./onboarding.browser.js";
 import { finalizeOnboardingWizard } from "./onboarding.finalize.js";
 import { configureGatewayForOnboarding } from "./onboarding.gateway-config.js";
+import {
+  promptMemoryDeployment,
+  applyMemoryDeploymentConfig,
+  initializeCredentialsPartition,
+} from "./onboarding.memory.js";
 import { applyOnboardingSandboxSelection } from "./onboarding.sandbox.js";
 import { ensureOnboardingShellWrapper } from "./onboarding.shell.js";
 import { applyOnboardingSudoSelection } from "./onboarding.sudo.js";
@@ -484,17 +489,23 @@ export async function runOnboardingWizard(
   if (!(opts.skipMemory ?? false)) {
     const memoryConfig = await promptMemoryDeployment(prompter, runtime);
     nextConfig = applyMemoryDeploymentConfig(nextConfig, memoryConfig);
-    
+
     // Create memory directory for minimal deployment
     if (memoryConfig.type === "minimal") {
       const { ensureMemoryDir } = await import("../commands/onboard-helpers.js");
       await ensureMemoryDir(runtime);
     }
-    
+
     // Initialize credentials partition if requested
     if (memoryConfig.type === "full" && memoryConfig.enableCredentials && memoryConfig.postgresql) {
       await initializeCredentialsPartition(memoryConfig.postgresql, runtime);
     }
+  }
+
+  // Setup browser (headless Chrome)
+  if (!(opts.skipBrowser ?? false)) {
+    const browserConfig = await promptBrowserSetup(prompter, runtime);
+    nextConfig = applyBrowserConfig(nextConfig, browserConfig);
   }
 
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
