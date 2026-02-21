@@ -433,10 +433,21 @@ export type ToolsConfig = {
   sudo?: {
     /**
      * - `never`: do not store or use sudo password.
-     * - `consent`: store password; use only after explicit user approval in chat each time.
-     * - `always`: store password; use automatically when needed (no per-use prompt).
+     * - `consent`: use sudo only after explicit user approval in chat each time.
+     * - `always`: use sudo automatically when needed (no per-use prompt).
      */
     mode?: "never" | "consent" | "always";
+    /**
+     * Sudo auth backend.
+     * - `password`: use stored password with `sudo -S`.
+     * - `nopasswd`: use `sudo -n` (requires a matching sudoers NOPASSWD rule).
+     */
+    auth?: "password" | "nopasswd";
+    /**
+     * Optional allowlist of shell command patterns that may run with sudo.
+     * When set, elevated commands must match at least one pattern.
+     */
+    allow?: string[];
   };
   /** Exec tool defaults. */
   exec?: ExecToolConfig;

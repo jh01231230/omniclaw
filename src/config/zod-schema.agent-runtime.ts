@@ -536,6 +536,8 @@ export const ToolsSchema = z
     sudo: z
       .object({
         mode: z.enum(["never", "consent", "always"]).optional(),
+        auth: z.enum(["password", "nopasswd"]).optional(),
+        allow: z.array(z.string()).optional(),
       })
       .strict()
       .optional(),

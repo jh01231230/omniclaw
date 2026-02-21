@@ -87,6 +87,7 @@ function isApplyPatchAllowedForModel(params: {
 
 function resolveExecConfig(cfg: OmniClawConfig | undefined) {
   const globalExec = cfg?.tools?.exec;
+  const globalSudo = cfg?.tools?.sudo;
   return {
     host: globalExec?.host,
     security: globalExec?.security,
@@ -100,6 +101,13 @@ function resolveExecConfig(cfg: OmniClawConfig | undefined) {
     cleanupMs: globalExec?.cleanupMs,
     notifyOnExit: globalExec?.notifyOnExit,
     applyPatch: globalExec?.applyPatch,
+    sudo: globalSudo
+      ? {
+          mode: globalSudo.mode,
+          auth: globalSudo.auth,
+          allow: globalSudo.allow,
+        }
+      : undefined,
   };
 }
 
@@ -284,6 +292,7 @@ export function createOmniClawCodingTools(options?: {
     approvalRunningNoticeMs:
       options?.exec?.approvalRunningNoticeMs ?? execConfig.approvalRunningNoticeMs,
     notifyOnExit: options?.exec?.notifyOnExit ?? execConfig.notifyOnExit,
+    sudo: options?.exec?.sudo ?? execConfig.sudo,
     sandbox: sandbox
       ? {
           containerName: sandbox.containerName,

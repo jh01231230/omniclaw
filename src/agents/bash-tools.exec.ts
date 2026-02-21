@@ -25,6 +25,7 @@ import {
   getShellPathFromLoginShell,
   resolveShellEnvFallbackTimeoutMs,
 } from "../infra/shell-env.js";
+import { readSudoPassword } from "../infra/sudo-credentials.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { logInfo, logWarn } from "../logger.js";
 import { formatSpawnError, spawnWithFallback } from "../process/spawn-utils.js";
@@ -182,6 +183,11 @@ export type ExecToolDefaults = {
   messageProvider?: string;
   notifyOnExit?: boolean;
   cwd?: string;
+  sudo?: {
+    mode?: "never" | "consent" | "always";
+    auth?: "password" | "nopasswd";
+    allow?: string[];
+  };
 };
 
 export type { BashSandboxConfig } from "./bash-tools.shared.js";
@@ -373,6 +379,34 @@ function applyShellPath(env: Record<string, string>, shellPath?: string | null) 
   }
 }
 
+function normalizeSudoAllowlist(entries?: string[]) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const normalized: Array<{ id: string; pattern: string }> = [];
+  for (const entry of entries) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const pattern = entry.trim();
+    if (!pattern) {
+      continue;
+    }
+    const key = pattern.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push({ id: key, pattern });
+  }
+  return normalized;
+}
+
+function stripLeadingSudo(command: string): string {
+  return command.replace(/^\s*sudo(?:\s+-[A-Za-z][^\s]*)*\s+/, "");
+}
+
 function maybeNotifyOnExit(session: ProcessSession, status: "completed" | "failed") {
   if (!session.backgrounded || !session.notifyOnExit || session.exitNotified) {
     return;
@@ -432,6 +466,7 @@ async function runExecProcess(opts: {
   scopeKey?: string;
   sessionKey?: string;
   timeoutSec: number;
+  sudo?: { auth: "password" | "nopasswd"; password?: string };
   onUpdate?: (partialResult: AgentToolResult<ExecToolDetails>) => void;
 }): Promise<ExecProcessHandle> {
   const startedAt = Date.now();
@@ -476,6 +511,17 @@ async function runExecProcess(opts: {
     stdin = child.stdin;
   } else if (opts.usePty) {
     const { shell, args: shellArgs } = getShellConfig();
+    const sudoArgs = opts.sudo
+      ? [
+          ...(opts.sudo.auth === "nopasswd" ? ["-n"] : ["-S", "-p", ""]),
+          "--",
+          shell,
+          ...shellArgs,
+          opts.command,
+        ]
+      : null;
+    const spawnPtyFile = opts.sudo ? "sudo" : shell;
+    const spawnPtyArgs = sudoArgs ?? [...shellArgs, opts.command];
     try {
       const ptyModule = (await import("@lydell/node-pty")) as unknown as {
         spawn?: PtySpawn;
@@ -485,13 +531,16 @@ async function runExecProcess(opts: {
       if (!spawnPty) {
         throw new Error("PTY support is unavailable (node-pty spawn not found).");
       }
-      pty = spawnPty(shell, [...shellArgs, opts.command], {
+      pty = spawnPty(spawnPtyFile, spawnPtyArgs, {
         cwd: opts.workdir,
         env: opts.env,
         name: process.env.TERM ?? "xterm-256color",
         cols: 120,
         rows: 30,
       });
+      if (opts.sudo?.auth === "password" && opts.sudo.password) {
+        pty.write(`${opts.sudo.password}\n`);
+      }
       stdin = {
         destroyed: false,
         write: (data, cb) => {
@@ -516,8 +565,18 @@ async function runExecProcess(opts: {
       const warning = `Warning: PTY spawn failed (${errText}); retrying without PTY for \`${opts.command}\`.`;
       logWarn(`exec: PTY spawn failed (${errText}); retrying without PTY for "${opts.command}".`);
       opts.warnings.push(warning);
+      const spawnArgv = opts.sudo
+        ? [
+            "sudo",
+            ...(opts.sudo.auth === "nopasswd" ? ["-n"] : ["-S", "-p", ""]),
+            "--",
+            shell,
+            ...shellArgs,
+            opts.command,
+          ]
+        : [shell, ...shellArgs, opts.command];
       const { child: spawned } = await spawnWithFallback({
-        argv: [shell, ...shellArgs, opts.command],
+        argv: spawnArgv,
         options: {
           cwd: opts.workdir,
           env: opts.env,
@@ -540,11 +599,24 @@ async function runExecProcess(opts: {
       });
       child = spawned as ChildProcessWithoutNullStreams;
       stdin = child.stdin;
+      if (opts.sudo?.auth === "password" && opts.sudo.password) {
+        child.stdin?.write(`${opts.sudo.password}\n`);
+      }
     }
   } else {
     const { shell, args: shellArgs } = getShellConfig();
+    const spawnArgv = opts.sudo
+      ? [
+          "sudo",
+          ...(opts.sudo.auth === "nopasswd" ? ["-n"] : ["-S", "-p", ""]),
+          "--",
+          shell,
+          ...shellArgs,
+          opts.command,
+        ]
+      : [shell, ...shellArgs, opts.command];
     const { child: spawned } = await spawnWithFallback({
-      argv: [shell, ...shellArgs, opts.command],
+      argv: spawnArgv,
       options: {
         cwd: opts.workdir,
         env: opts.env,
@@ -567,6 +639,9 @@ async function runExecProcess(opts: {
     });
     child = spawned as ChildProcessWithoutNullStreams;
     stdin = child.stdin;
+    if (opts.sudo?.auth === "password" && opts.sudo.password) {
+      child.stdin?.write(`${opts.sudo.password}\n`);
+    }
   }
 
   const session = {
@@ -943,7 +1018,12 @@ export function createExecTool(
       const configuredAsk = defaults?.ask ?? "on-miss";
       const requestedAsk = normalizeExecAsk(params.ask);
       let ask = maxAsk(configuredAsk, requestedAsk ?? configuredAsk);
-      const bypassApprovals = elevatedRequested && elevatedMode === "full";
+      const sudoMode = defaults?.sudo?.mode ?? "never";
+      const sudoAuth = defaults?.sudo?.auth === "nopasswd" ? "nopasswd" : "password";
+      const sudoAllowlist = normalizeSudoAllowlist(defaults?.sudo?.allow);
+      const shouldUseSudo = host === "gateway" && elevatedRequested && sudoMode !== "never";
+      const sudoConsentRequired = shouldUseSudo && sudoMode === "consent";
+      const bypassApprovals = elevatedRequested && elevatedMode === "full" && !sudoConsentRequired;
       if (bypassApprovals) {
         ask = "off";
       }
@@ -991,6 +1071,36 @@ export function createExecTool(
         applyShellPath(env, shellPath);
       }
       applyPathPrepend(env, defaultPathPrepend);
+
+      const commandForExecution = shouldUseSudo ? stripLeadingSudo(params.command) : params.command;
+      if (shouldUseSudo && !commandForExecution.trim()) {
+        throw new Error("sudo denied: command is empty after removing leading sudo.");
+      }
+      if (shouldUseSudo && sudoAllowlist.length > 0) {
+        const sudoAllowEval = evaluateShellAllowlist({
+          command: commandForExecution,
+          allowlist: sudoAllowlist,
+          safeBins: new Set(),
+          cwd: workdir,
+          env,
+        });
+        if (!sudoAllowEval.analysisOk || !sudoAllowEval.allowlistSatisfied) {
+          throw new Error(
+            "sudo denied: command is not allowed by tools.sudo.allow (add a matching pattern).",
+          );
+        }
+      }
+      const sudoPassword =
+        shouldUseSudo && sudoAuth === "password" ? readSudoPassword(process.env) : undefined;
+      if (shouldUseSudo && sudoAuth === "password" && !sudoPassword?.trim()) {
+        throw new Error(
+          "sudo password is not configured. Run `omniclaw onboard` and set tools.sudo.auth=password.",
+        );
+      }
+      const sudoRuntime =
+        shouldUseSudo && !sandbox
+          ? { auth: sudoAuth as "password" | "nopasswd", password: sudoPassword }
+          : undefined;
 
       if (host === "node") {
         const approvals = resolveExecApprovals(agentId, { security, ask });
@@ -1271,13 +1381,14 @@ export function createExecTool(
       if (host === "gateway" && !bypassApprovals) {
         const approvals = resolveExecApprovals(agentId, { security, ask });
         const hostSecurity = minSecurity(security, approvals.agent.security);
-        const hostAsk = maxAsk(ask, approvals.agent.ask);
+        const baseHostAsk = maxAsk(ask, approvals.agent.ask);
+        const hostAsk = sudoConsentRequired ? "always" : baseHostAsk;
         const askFallback = approvals.agent.askFallback;
         if (hostSecurity === "deny") {
           throw new Error("exec denied: host=gateway security=deny");
         }
         const allowlistEval = evaluateShellAllowlist({
-          command: params.command,
+          command: commandForExecution,
           allowlist: approvals.allowlist,
           safeBins,
           cwd: workdir,
@@ -1301,7 +1412,7 @@ export function createExecTool(
           const contextKey = `exec:${approvalId}`;
           const resolvedPath = allowlistEval.segments[0]?.resolution?.resolvedPath;
           const noticeSeconds = Math.max(1, Math.round(approvalRunningNoticeMs / 1000));
-          const commandText = params.command;
+          const commandText = commandForExecution;
           const effectiveTimeout =
             typeof params.timeout === "number" ? params.timeout : defaultTimeoutSec;
           const warningText = warnings.length ? `${warnings.join("\n")}\n\n` : "";
@@ -1418,6 +1529,7 @@ export function createExecTool(
                 scopeKey: defaults?.scopeKey,
                 sessionKey: notifySessionKey,
                 timeoutSec: effectiveTimeout,
+                sudo: sudoRuntime,
               });
             } catch {
               emitExecSystemEvent(
@@ -1489,7 +1601,7 @@ export function createExecTool(
               approvals.file,
               agentId,
               match,
-              params.command,
+              commandForExecution,
               allowlistEval.segments[0]?.resolution?.resolvedPath,
             );
           }
@@ -1501,7 +1613,7 @@ export function createExecTool(
       const getWarningText = () => (warnings.length ? `${warnings.join("\n")}\n\n` : "");
       const usePty = params.pty === true && !sandbox;
       const run = await runExecProcess({
-        command: params.command,
+        command: commandForExecution,
         workdir,
         env,
         sandbox,
@@ -1514,6 +1626,7 @@ export function createExecTool(
         scopeKey: defaults?.scopeKey,
         sessionKey: notifySessionKey,
         timeoutSec: effectiveTimeout,
+        sudo: sudoRuntime,
         onUpdate,
       });
 

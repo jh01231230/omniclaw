@@ -180,6 +180,8 @@ const FIELD_LABELS: Record<string, string> = {
   "tools.exec.ask": "Exec Ask",
   "tools.exec.node": "Exec Node Binding",
   "tools.sudo.mode": "Sudo Password Policy",
+  "tools.sudo.auth": "Sudo Authentication Mode",
+  "tools.sudo.allow": "Sudo Command Allowlist",
   "tools.exec.pathPrepend": "Exec PATH Prepend",
   "tools.exec.safeBins": "Exec Safe Bins",
   "tools.message.allowCrossContextSend": "Allow Cross-Context Messaging",
@@ -431,7 +433,11 @@ const FIELD_HELP: Record<string, string> = {
   "tools.exec.safeBins":
     "Allow stdin-only safe binaries to run without explicit allowlist entries.",
   "tools.sudo.mode":
-    "Sudo/root password policy: never (do not use), consent (ask in chat each time), always (use stored password automatically). Set during omniclaw onboard.",
+    "Sudo/root policy: never (do not use), consent (ask in chat each time), always (use automatically). Set during omniclaw onboard.",
+  "tools.sudo.auth":
+    "Sudo auth backend: password (sudo -S with stored password) or nopasswd (sudo -n; requires sudoers NOPASSWD rule).",
+  "tools.sudo.allow":
+    "Optional allowlist of shell command patterns that may run with sudo. When set, elevated sudo runs must match.",
   "tools.message.allowCrossContextSend":
     "Legacy override: allow cross-context sends across all providers.",
   "tools.message.crossContext.allowWithinProvider":

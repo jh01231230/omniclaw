@@ -181,4 +181,70 @@ describe("exec approvals", () => {
     await approvalSeen;
     expect(calls).toContain("exec.approval.request");
   });
+
+  it("forces approval in sudo consent mode even when elevated full would bypass", async () => {
+    const { callGatewayTool } = await import("./tools/gateway.js");
+    const calls: string[] = [];
+    let resolveApproval: (() => void) | undefined;
+    const approvalSeen = new Promise<void>((resolve) => {
+      resolveApproval = resolve;
+    });
+
+    vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+      calls.push(method);
+      if (method === "exec.approval.request") {
+        resolveApproval?.();
+        return { decision: "deny" };
+      }
+      return { ok: true };
+    });
+
+    const { createExecTool } = await import("./bash-tools.exec.js");
+    const tool = createExecTool({
+      ask: "off",
+      security: "full",
+      approvalRunningNoticeMs: 0,
+      elevated: { enabled: true, allowed: true, defaultLevel: "full" },
+      sudo: { mode: "consent", auth: "nopasswd" },
+    });
+
+    const result = await tool.execute("call5", { command: "echo ok", elevated: true });
+    expect(result.details.status).toBe("approval-pending");
+    await approvalSeen;
+    expect(calls).toContain("exec.approval.request");
+  });
+
+  it("rejects sudo elevated command when tools.sudo.allow does not match", async () => {
+    const { createExecTool } = await import("./bash-tools.exec.js");
+    const tool = createExecTool({
+      elevated: { enabled: true, allowed: true, defaultLevel: "ask" },
+      sudo: {
+        mode: "always",
+        auth: "nopasswd",
+        allow: ["systemctl status omniclaw-gateway.service"],
+      },
+    });
+
+    await expect(
+      tool.execute("call6", {
+        command: "echo ok",
+        elevated: true,
+      }),
+    ).rejects.toThrow("sudo denied: command is not allowed by tools.sudo.allow");
+  });
+
+  it("rejects password sudo mode when no password is stored", async () => {
+    const { createExecTool } = await import("./bash-tools.exec.js");
+    const tool = createExecTool({
+      elevated: { enabled: true, allowed: true, defaultLevel: "ask" },
+      sudo: { mode: "always", auth: "password" },
+    });
+
+    await expect(
+      tool.execute("call7", {
+        command: "echo ok",
+        elevated: true,
+      }),
+    ).rejects.toThrow("sudo password is not configured");
+  });
 });
