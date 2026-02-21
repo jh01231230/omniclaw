@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { HookHandler, InternalHookEvent } from "../../hooks.js";
-import { loadConfig } from "../../config/config.js";
-import { resolveStateDir } from "../../config/paths.js";
+import { loadConfig } from "../../../config/config.js";
+import { resolveStateDir } from "../../../config/paths.js";
 
 /**
  * Memory Extraction Hook
@@ -85,26 +85,29 @@ const calculateImportance = async (content: string, _model?: string): Promise<nu
 };
 
 const extractMemory: HookHandler = async (event: InternalHookEvent) => {
+  const eventType = event.type as string;
   // Run on session end or periodic trigger
   if (event.type !== "session" || (event as any).action !== "end") {
     // Also run on heartbeat for periodic extraction
-    if (event.type !== "heartbeat") {
+    if (eventType !== "heartbeat") {
       return;
     }
   }
 
   const cfg = loadConfig();
-  const memorySearch = cfg.agents?.defaults?.memorySearch;
+  const memorySearch = cfg.agents?.defaults?.memorySearch as Record<string, unknown> | undefined;
+  const deployment =
+    typeof memorySearch?.deployment === "string" ? memorySearch.deployment : undefined;
 
   // Only run if full deployment
-  if (memorySearch?.deployment !== "full") {
+  if (deployment !== "full") {
     return;
   }
 
   console.log("[memory-extract] Running memory extraction...");
 
   try {
-    const stateDir = resolveStateDir(process.env, os.homedir());
+    const stateDir = resolveStateDir(process.env, os.homedir);
     const sessionsDir = path.join(stateDir, "agents", "main", "sessions");
 
     // Get recent sessions

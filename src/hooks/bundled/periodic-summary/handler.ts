@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { HookHandler, InternalHookEvent } from "../../hooks.js";
-import { loadConfig } from "../../config/config.js";
-import { resolveStateDir } from "../../config/paths.js";
+import { loadConfig } from "../../../config/config.js";
+import { resolveStateDir } from "../../../config/paths.js";
 
 /**
  * Periodic Memory Summarization Hook
@@ -19,17 +19,22 @@ const SUMMARY_PROMPT = `Please summarize the following conversation concisely, f
 Format as a brief journal entry.`;
 
 const summarizeConversations: HookHandler = async (event: InternalHookEvent) => {
+  const eventType = event.type as string;
   // Only run periodically
-  if (event.type !== "cron" && event.type !== "heartbeat") {
+  if (eventType !== "cron" && eventType !== "heartbeat") {
     return;
   }
 
   // Load config
   const cfg = loadConfig();
-  const memorySearch = cfg.agents?.defaults?.memorySearch;
+  const memorySearch = cfg.agents?.defaults?.memorySearch as Record<string, unknown> | undefined;
 
   // Check if periodicSummary is enabled
-  const summaryConfig = memorySearch?.periodicSummary;
+  const summaryConfigRaw = memorySearch?.periodicSummary;
+  const summaryConfig =
+    summaryConfigRaw && typeof summaryConfigRaw === "object"
+      ? (summaryConfigRaw as { enabled?: boolean; outputPath?: string; prompt?: string })
+      : undefined;
   if (!summaryConfig?.enabled) {
     return;
   }
@@ -38,7 +43,7 @@ const summarizeConversations: HookHandler = async (event: InternalHookEvent) => 
 
   try {
     // Get sessions directory
-    const stateDir = resolveStateDir(process.env, os.homedir());
+    const stateDir = resolveStateDir(process.env, os.homedir);
     const agentId = "main";
     const sessionsDir = path.join(stateDir, "agents", agentId, "sessions");
 

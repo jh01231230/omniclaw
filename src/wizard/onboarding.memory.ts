@@ -157,8 +157,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_metadata_tags ON memory_metadata USING gin
     return true;
   } catch (error) {
     runtime.error(`Failed to initialize memory schema: ${error}`);
-    runtime.warn(
-      `If pgvector not installed, run: cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git && cd pgvector && make PG_CONFIG=/path/to/pg_config && sudo make install`,
+    runtime.log(
+      `Warning: If pgvector is not installed, run: cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git && cd pgvector && make PG_CONFIG=/path/to/pg_config && sudo make install`,
     );
     return false;
   }
@@ -346,7 +346,7 @@ export async function promptMemoryDeployment(
         runtime,
       );
     } catch (err) {
-      runtime.warn(`Memory schema initialization skipped: ${err}`);
+      runtime.log(`Warning: Memory schema initialization skipped: ${err}`);
     }
   }
 
