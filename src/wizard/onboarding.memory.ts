@@ -282,6 +282,13 @@ export function applyMemoryDeploymentConfig(
       driver: "sqlite",
       path: "~/.omniclaw/memory.db",
     };
+    // Minimal also gets basic sync
+    memorySettings.sync = {
+      onSessionStart: true,
+      onSearch: true,
+      watch: false,
+      intervalMinutes: 60,
+    };
   } else if (memoryConfig.type === "full" && memoryConfig.postgresql) {
     // Full: Use PostgreSQL
     memorySettings.store = {
@@ -310,6 +317,20 @@ export function applyMemoryDeploymentConfig(
     if (memoryConfig.enableCredentials !== undefined) {
       memorySettings.enableCredentials = memoryConfig.enableCredentials;
     }
+
+    // Add periodic summary for full deployment
+    memorySettings.sync = {
+      onSessionStart: true,
+      onSearch: true,
+      watch: false,
+      intervalMinutes: 30,
+    };
+
+    memorySettings.periodicSummary = {
+      enabled: true,
+      intervalHours: 24,
+      outputPath: "~/.omniclaw/memory/periodic-summaries.md",
+    };
   }
 
   const agents = baseConfig.agents ?? {};

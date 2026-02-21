@@ -400,6 +400,16 @@ export const MemorySearchSchema = z
       })
       .strict()
       .optional(),
+    // Periodic summarization - auto-reflect on recent conversations
+    periodicSummary: z
+      .object({
+        enabled: z.boolean().optional(),
+        intervalHours: z.number().int().positive().optional(), // How often to summarize
+        prompt: z.string().optional(), // Custom prompt for summarization
+        outputPath: z.string().optional(), // Where to save summaries
+      })
+      .strict()
+      .optional(),
     query: z
       .object({
         maxResults: z.number().int().positive().optional(),
