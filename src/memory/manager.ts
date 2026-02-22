@@ -45,6 +45,9 @@ import { ensureMemoryIndexSchema } from "./memory-schema.js";
 import { loadSqliteVecExtension } from "./sqlite-vec.js";
 import { requireNodeSqlite } from "./sqlite.js";
 
+// PostgreSQL store (lazy import)
+import { PostgreSQLMemoryStore, type MemoryEntry } from "./postgresql-store.js";
+
 type MemorySource = "memory" | "sessions";
 
 export type MemorySearchResult = {
@@ -138,6 +141,8 @@ export class MemoryIndexManager {
   private batchFailureLastProvider?: string;
   private batchFailureLock: Promise<void> = Promise.resolve();
   private db: DatabaseSync;
+  private pgStore: PostgreSQLMemoryStore | null = null;
+  private readonly usePostgreSQL: boolean;
   private readonly sources: Set<MemorySource>;
   private providerKey: string;
   private readonly cache: { enabled: boolean; maxEntries?: number };
@@ -227,23 +232,50 @@ export class MemoryIndexManager {
     this.openAi = params.providerResult.openAi;
     this.gemini = params.providerResult.gemini;
     this.sources = new Set(params.settings.sources);
-    this.db = this.openDatabase();
+    
+    // Check if using PostgreSQL
+    this.usePostgreSQL = params.settings.store.driver === "postgresql";
+    
+    if (this.usePostgreSQL) {
+      // Initialize PostgreSQL store
+      const pgConfig = params.settings.store;
+      this.pgStore = new PostgreSQLMemoryStore({
+        host: pgConfig.host,
+        port: pgConfig.port,
+        database: pgConfig.database,
+        user: pgConfig.user,
+        password: pgConfig.password,
+      });
+    } else {
+      this.db = this.openDatabase();
+      this.ensureSchema();
+    }
+    
     this.providerKey = this.computeProviderKey();
     this.cache = {
       enabled: params.settings.cache.enabled,
       maxEntries: params.settings.cache.maxEntries,
     };
     this.fts = { enabled: params.settings.query.hybrid.enabled, available: false };
-    this.ensureSchema();
-    this.vector = {
-      enabled: params.settings.store.vector.enabled,
-      available: null,
-      extensionPath: params.settings.store.vector.extensionPath,
-    };
-    const meta = this.readMeta();
-    if (meta?.vectorDims) {
-      this.vector.dims = meta.vectorDims;
+    
+    if (!this.usePostgreSQL) {
+      this.vector = {
+        enabled: params.settings.store.vector.enabled,
+        available: null,
+        extensionPath: params.settings.store.vector.extensionPath,
+      };
+      const meta = this.readMeta();
+      if (meta?.vectorDims) {
+        this.vector.dims = meta.vectorDims;
+      }
+    } else {
+      this.vector = {
+        enabled: true,
+        available: true,
+        dims: 1536,
+      };
     }
+    
     this.ensureWatcher();
     this.ensureSessionListener();
     this.ensureIntervalSync();
@@ -275,6 +307,26 @@ export class MemoryIndexManager {
       sessionKey?: string;
     },
   ): Promise<MemorySearchResult[]> {
+    // Use PostgreSQL if configured
+    if (this.usePostgreSQL && this.pgStore) {
+      try {
+        await this.pgStore.initialize();
+        const queryVec = await this.embedQueryWithTimeout(query);
+        const memories = await this.pgStore.searchSimilar(queryVec, opts?.maxResults ?? 10);
+        return memories.map((m: MemoryEntry) => ({
+          path: m.metadata?.file || m.id,
+          startLine: 1,
+          endLine: 100,
+          score: 0.9, // PostgreSQL returns unscaled similarity
+          snippet: m.content?.slice(0, 500) || "",
+          source: m.source || "memory",
+        }));
+      } catch (err) {
+        log.warn(`PostgreSQL search failed: ${err}`);
+        return [];
+      }
+    }
+    
     void this.warmSession(opts?.sessionKey);
     if (this.settings.sync.onSearch && (this.dirty || this.sessionsDirty)) {
       void this.sync({ reason: "search" }).catch((err) => {
@@ -505,6 +557,24 @@ export class MemoryIndexManager {
       lastProvider?: string;
     };
   } {
+    // PostgreSQL status
+    if (this.usePostgreSQL) {
+      return {
+        files: 0,
+        chunks: 0,
+        dirty: this.dirty,
+        workspaceDir: this.workspaceDir,
+        dbPath: `postgresql://${this.settings.store.host}:${this.settings.store.port}/${this.settings.store.database}`,
+        provider: this.provider.id,
+        model: this.provider.model,
+        requestedProvider: this.requestedProvider,
+        sources: Array.from(this.sources),
+        extraPaths: this.settings.extraPaths,
+        sourceCounts: [],
+        vector: this.vector,
+      };
+    }
+    
     const sourceFilter = this.buildSourceFilter();
     const files = this.db
       .prepare(`SELECT COUNT(*) as c FROM files WHERE 1=1${sourceFilter.sql}`)
