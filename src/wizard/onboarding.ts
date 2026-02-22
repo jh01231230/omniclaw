@@ -487,7 +487,11 @@ export async function runOnboardingWizard(
 
   // Setup memory deployment (minimal vs full PostgreSQL)
   if (!(opts.skipMemory ?? false)) {
-    const memoryConfig = await promptMemoryDeployment(prompter, runtime);
+    const memoryConfig = await promptMemoryDeployment(prompter, runtime, {
+      memoryMode: opts.memoryMode,
+      memoryPath: opts.memoryPath,
+      autoInstall: opts.autoInstallMemory,
+    });
     nextConfig = applyMemoryDeploymentConfig(nextConfig, memoryConfig);
 
     // Create memory directory for minimal deployment

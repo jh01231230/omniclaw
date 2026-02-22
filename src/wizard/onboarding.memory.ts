@@ -1,4 +1,7 @@
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import type { OmniClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "./prompts.js";
@@ -9,6 +12,7 @@ export type MemoryDeploymentType = "minimal" | "full";
 export interface MemoryDeploymentConfig {
   type: MemoryDeploymentType;
   enableCredentials?: boolean; // Whether to create credentials partition
+  autoInstall?: boolean; // Auto-install PostgreSQL + Redis
   postgresql?: {
     host: string;
     port: number;
@@ -20,6 +24,184 @@ export interface MemoryDeploymentConfig {
     autoStart?: boolean; // Auto-start on gateway boot
   };
   dataPath?: string; // For minimal: ~/.omniclaw/memory; For full: custom PostgreSQL path
+}
+
+/**
+ * Detect the platform and return appropriate install info
+ */
+function detectPlatform(): { isLinux: boolean; isMac: boolean; isArm: boolean } {
+  const platform = process.platform;
+  const arch = process.arch;
+  return {
+    isLinux: platform === "linux",
+    isMac: platform === "darwin",
+    isArm: arch === "arm64" || arch === "aarch64",
+  };
+}
+
+/**
+ * Auto-install PostgreSQL 17 + Redis for full memory mode
+ */
+export async function autoInstallMemoryServices(
+  storagePath: string,
+  prompter: WizardPrompter,
+  runtime: RuntimeEnv = defaultRuntime,
+): Promise<{
+  postgresql: MemoryDeploymentConfig["postgresql"];
+  redisInstalled: boolean;
+}> {
+  const { isLinux, isMac, isArm } = detectPlatform();
+
+  if (!isLinux && !isMac) {
+    await prompter.note(
+      "Automatic installation is only supported on Linux and macOS. Please install PostgreSQL 17+ and Redis manually.",
+      "Auto-install not supported",
+    );
+    throw new Error("Auto-install not supported on this platform");
+  }
+
+  const installPath = path.join(storagePath, "postgresql-installed");
+  const dataPath = path.join(storagePath, "postgresql", "data");
+  const redisDataPath = path.join(storagePath, "redis");
+
+  runtime.log(`Auto-installing memory services to: ${storagePath}`);
+
+  // Create directories
+  await prompter.note(`Creating directories at ${storagePath}...`, "Memory Setup");
+  execSync(`mkdir -p "${installPath}" "${dataPath}" "${redisDataPath}"`, { stdio: "pipe" });
+
+  // Check if running on ARM (like NVIDIA Jetson)
+  const isArmBoard = isArm && isLinux;
+
+  if (isLinux) {
+    // Try to install via apt first (faster)
+    try {
+      runtime.log("Attempting PostgreSQL installation via apt...");
+      execSync("sudo apt-get update && sudo apt-get install -y postgresql-17 postgresql-17-postgis-3 redis-server", {
+        stdio: "inherit",
+      });
+    } catch {
+      // If apt fails, use the custom installer script
+      runtime.log("apt install failed, using custom installer...");
+      const installerScript = "/home/tars/Workspace/scripts/install_tars_memory.sh";
+
+      if (fs.existsSync(installerScript)) {
+        // Run the installer with custom paths
+        execSync(`bash "${installerScript}"`, {
+          env: {
+            ...process.env,
+            OPTANE_MOUNT: storagePath,
+            POSTGRES_INSTALL: installPath,
+            POSTGRES_DATA: dataPath,
+            REDIS_DATA: redisDataPath,
+          },
+          stdio: "inherit",
+        });
+      } else {
+        // Fall back to basic installation instructions
+        await prompter.note(
+          [
+            `PostgreSQL 17+ is required but not installed.`,
+            isArmBoard
+              ? "For ARM devices (Jetson), please compile PostgreSQL from source."
+              : "Please run:",
+            "",
+            "  # For Ubuntu/Debian:",
+            "  sudo apt install postgresql-17",
+            "  # OR use the TARS Memory installer:",
+            "  bash /home/tars/Workspace/scripts/install_tars_memory.sh",
+            "",
+            `Storage path: ${storagePath}`,
+          ].join("\n"),
+          "PostgreSQL Required",
+        );
+        throw new Error("PostgreSQL not installed");
+      }
+    }
+  } else if (isMac) {
+    // macOS installation
+    try {
+      // Check if Homebrew is available
+      execSync("which brew", { stdio: "pipe" });
+      runtime.log("Installing PostgreSQL and Redis via Homebrew...");
+      execSync("brew install postgresql@17 redis", { stdio: "inherit" });
+
+      // Start services
+      execSync("brew services start postgresql@17", { stdio: "inherit" });
+      execSync("brew services start redis", { stdio: "inherit" });
+    } catch {
+      await prompter.note(
+        [
+          "PostgreSQL 17+ is required but not installed.",
+          "Please install Homebrew and run:",
+          "  brew install postgresql@17 redis",
+          "  brew services start postgresql@17",
+          "  brew services start redis",
+        ].join("\n"),
+        "PostgreSQL Required",
+      );
+      throw new Error("PostgreSQL not installed");
+    }
+  }
+
+  // Try to start PostgreSQL if not running
+  const pgBinPaths = [
+    "/media/tars/TARS_MEMORY/postgresql-installed/bin",
+    "/usr/lib/postgresql/17/bin",
+    "/usr/local/opt/postgresql@17/bin",
+    "/opt/homebrew/opt/postgresql@17/bin",
+  ];
+
+  let psqlPath = "";
+  for (const p of pgBinPaths) {
+    if (fs.existsSync(path.join(p, "psql"))) {
+      psqlPath = p;
+      break;
+    }
+  }
+
+  // Try to start PostgreSQL
+  if (psqlPath) {
+    try {
+      const pgCtl = path.join(psqlPath, "pg_ctl");
+      if (fs.existsSync(pgCtl)) {
+        execSync(`${pgCtl -D "${dataPath}" status || ${pgCtl} -D "${dataPath}" start -w`, {
+          stdio: "pipe",
+        });
+      }
+    } catch {
+      runtime.log("PostgreSQL may already be running or could not be started");
+    }
+  }
+
+  // Check if Redis is available
+  let redisInstalled = false;
+  try {
+    execSync("redis-cli ping", { stdio: "pipe" });
+    redisInstalled = true;
+  } catch {
+    // Try to start redis
+    try {
+      execSync("redis-server --daemonize yes", { stdio: "pipe" });
+      redisInstalled = true;
+    } catch {
+      runtime.log("Redis could not be started");
+    }
+  }
+
+  return {
+    postgresql: {
+      host: "localhost",
+      port: 5432,
+      database: "openclaw_memory",
+      user: isMac ? os.userInfo().username : "postgres",
+      password: "",
+      installPath,
+      dataPath,
+      autoStart: true,
+    },
+    redisInstalled,
+  };
 }
 
 /**
@@ -226,40 +408,84 @@ export async function ensurePostgreSQL(
   return install;
 }
 
+export interface PromptMemoryDeploymentOptions {
+  memoryMode?: MemoryDeploymentType;
+  memoryPath?: string;
+  autoInstall?: boolean;
+}
+
 export async function promptMemoryDeployment(
   prompter: WizardPrompter,
   runtime: RuntimeEnv,
+  options?: PromptMemoryDeploymentOptions,
 ): Promise<MemoryDeploymentConfig> {
-  const type = await prompter.select({
-    message: "Choose memory deployment type",
-    options: [
-      {
-        value: "minimal",
-        label: "Minimal (SQLite)",
-        hint: "Lightweight file-based storage. Memory files in ~/.omniclaw/memory",
-      },
-      {
-        value: "full",
-        label: "Full (PostgreSQL)",
-        hint: "Full-featured vector database. Requires PostgreSQL 17+",
-      },
-    ],
-    initialValue: "minimal",
-  });
+  // Use provided options in non-interactive mode
+  let type: MemoryDeploymentType = "minimal";
 
-  const config: MemoryDeploymentConfig = { type: type as MemoryDeploymentType };
+  if (options?.memoryMode) {
+    type = options.memoryMode;
+  } else {
+    type = await prompter.select({
+      message: "Choose memory deployment type",
+      options: [
+        {
+          value: "minimal",
+          label: "Minimal (SQLite)",
+          hint: "Lightweight file-based storage. Memory files in ~/.omniclaw/memory",
+        },
+        {
+          value: "full",
+          label: "Full (PostgreSQL)",
+          hint: "Full-featured vector database with embedding search. Requires PostgreSQL 17+",
+        },
+      ],
+      initialValue: "minimal",
+    }) as MemoryDeploymentType;
+  }
+
+  const config: MemoryDeploymentConfig = {
+    type,
+    autoInstall: options?.autoInstall,
+  };
 
   // For full deployment, check PostgreSQL installation
   if (type === "full") {
-    const pgReady = await ensurePostgreSQL(prompter, runtime);
-    if (!pgReady) {
-      // Fall back to minimal if PostgreSQL not available
-      await prompter.note("Falling back to minimal memory deployment.", "PostgreSQL");
-      config.type = "minimal";
+    // Auto-install if requested
+    if (options?.autoInstall && options?.memoryPath) {
+      try {
+        await prompter.note("Auto-installing PostgreSQL and Redis...", "Memory Setup");
+        const installResult = await autoInstallMemoryServices(
+          options.memoryPath,
+          prompter,
+          runtime,
+        );
+        config.postgresql = installResult.postgresql;
+
+        // Create database if needed
+        if (installResult.postgresql) {
+          const { createDatabase } = await import("../infra/postgres.js");
+          await createDatabase(
+            installResult.postgresql.database,
+            installResult.postgresql.user,
+            runtime,
+          );
+        }
+      } catch (err) {
+        runtime.error(`Auto-install failed: ${err}`);
+        await prompter.note("Auto-install failed. Please install manually or use minimal mode.", "Memory Setup");
+        config.type = "minimal";
+      }
+    } else {
+      const pgReady = await ensurePostgreSQL(prompter, runtime);
+      if (!pgReady) {
+        // Fall back to minimal if PostgreSQL not available
+        await prompter.note("Falling back to minimal memory deployment.", "PostgreSQL");
+        config.type = "minimal";
+      }
     }
   }
 
-  if (config.type === "full") {
+  if (config.type === "full" && config.postgresql) {
     // For full deployment, prompt for PostgreSQL configuration
     const useDefault = await prompter.confirm({
       message: "Use default PostgreSQL at localhost:5432?",

@@ -20,6 +20,12 @@ import { logNonInteractiveOnboardingJson } from "./local/output.js";
 import { applyNonInteractiveSkillsConfig } from "./local/skills-config.js";
 import { resolveNonInteractiveWorkspaceDir } from "./local/workspace.js";
 import { applyNonInteractiveSandboxDefaults } from "./sandbox-defaults.js";
+import {
+  applyMemoryDeploymentConfig,
+  autoInstallMemoryServices,
+  type MemoryDeploymentConfig,
+} from "../../wizard/onboarding.memory.js";
+import { ensureMemoryDir } from "../onboard-helpers.js";
 
 export async function runNonInteractiveOnboardingLocal(params: {
   opts: OnboardOptions;
@@ -78,6 +84,50 @@ export async function runNonInteractiveOnboardingLocal(params: {
   nextConfig = gatewayResult.nextConfig;
 
   nextConfig = applyNonInteractiveSkillsConfig({ nextConfig, opts, runtime });
+
+  // Setup memory deployment (minimal vs full PostgreSQL)
+  if (!opts.skipMemory) {
+    const memoryMode = opts.memoryMode ?? "minimal";
+    const memoryConfig: MemoryDeploymentConfig = { type: memoryMode };
+
+    if (memoryMode === "full") {
+      if (opts.autoInstallMemory && opts.memoryPath) {
+        // Auto-install memory services
+        try {
+          runtime.log(`Auto-installing memory services to: ${opts.memoryPath}`);
+          const installResult = await autoInstallMemoryServices(
+            opts.memoryPath,
+            { confirm: async () => true, note: async () => {} } as any,
+            runtime,
+          );
+          memoryConfig.postgresql = installResult.postgresql;
+          memoryConfig.autoInstall = true;
+        } catch (err) {
+          runtime.error(`Auto-install failed: ${err}, falling back to minimal mode`);
+          memoryConfig.type = "minimal";
+        }
+      } else {
+        // Use default PostgreSQL config
+        memoryConfig.postgresql = {
+          host: "localhost",
+          port: 5432,
+          database: "openclaw_memory",
+          user: "postgres",
+          password: "",
+          installPath: "/media/tars/TARS_MEMORY/postgresql-installed",
+          dataPath: "/media/tars/TARS_MEMORY/postgresql/data",
+          autoStart: true,
+        };
+      }
+    }
+
+    nextConfig = applyMemoryDeploymentConfig(nextConfig, memoryConfig);
+
+    // Create memory directory for minimal deployment
+    if (memoryConfig.type === "minimal") {
+      await ensureMemoryDir(runtime);
+    }
+  }
 
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);

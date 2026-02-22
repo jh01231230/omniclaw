@@ -43,6 +43,8 @@ export type ChannelChoice = ChannelId;
 // Legacy alias (pre-rename).
 export type ProviderChoice = ChannelChoice;
 
+export type MemoryMode = "minimal" | "full";
+
 export type OnboardOptions = {
   mode?: OnboardMode;
   /** "manual" is an alias for "advanced". */
@@ -52,6 +54,12 @@ export type OnboardOptions = {
   /** Required for non-interactive onboarding; skips the interactive risk prompt when true. */
   acceptRisk?: boolean;
   reset?: boolean;
+  /** Memory deployment mode: minimal (SQLite) or full (PostgreSQL + Redis) */
+  memoryMode?: MemoryMode;
+  /** Custom storage path for memory data (used in full mode) */
+  memoryPath?: string;
+  /** Auto-install PostgreSQL + Redis for full memory mode */
+  autoInstallMemory?: boolean;
   authChoice?: AuthChoice;
   /** Used when `authChoice=token` in non-interactive mode. */
   tokenProvider?: string;
