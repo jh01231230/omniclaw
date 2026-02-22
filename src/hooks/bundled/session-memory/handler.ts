@@ -2,8 +2,8 @@
  * Session memory hook handler
  *
  * Saves session context to memory when /new command is triggered
- * Creates a new dated memory file with LLM-generated slug
- * Also supports PostgreSQL storage when configured
+ * Full mode (PostgreSQL): stores to database only
+ * Minimal mode (SQLite): writes to memory files
  */
 
 import fs from "node:fs/promises";
@@ -18,7 +18,18 @@ import { resolveAgentIdFromSessionKey } from "../../../routing/session-key.js";
 import { resolveHookConfig } from "../../config.js";
 
 /**
- * PostgreSQL helper for storing memories
+ * Get memory deployment mode from config
+ */
+function getMemoryMode(cfg: OmniClawConfig | undefined): "minimal" | "full" {
+  if (!cfg?.agents?.defaults?.memorySearch) {
+    return "minimal";
+  }
+  const mem = cfg.agents.defaults.memorySearch as Record<string, unknown>;
+  return (mem.deployment as "minimal" | "full") || "minimal";
+}
+
+/**
+ * PostgreSQL helper for storing memories (full mode)
  */
 async function storeToPostgreSQL(
   content: string,
@@ -30,7 +41,7 @@ async function storeToPostgreSQL(
   const psqlPath = "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
   const id = randomUUID();
   const metadataStr = JSON.stringify(metadata).replace(/'/g, "''");
-  
+
   try {
     const tagsStr = "ARRAY['session-memory']";
     execSync(
@@ -193,13 +204,28 @@ const saveSessionToMemory: HookHandler = async (event) => {
 
     const entry = entryParts.join("\n");
 
-    // Write to new memory file
-    await fs.writeFile(memoryFilePath, entry, "utf-8");
-    console.log("[session-memory] Memory file written successfully");
+    // Get memory deployment mode
+    const memoryMode = getMemoryMode(cfg);
 
-    // Log completion (but don't send user-visible confirmation - it's internal housekeeping)
-    const relPath = memoryFilePath.replace(os.homedir(), "~");
-    console.log(`[session-memory] Session context saved to ${relPath}`);
+    if (memoryMode === "full") {
+      // Full mode: store to PostgreSQL only (no file writes)
+      const metadata = {
+        sessionKey: event.sessionKey,
+        sessionId,
+        source,
+        date: dateStr,
+        slug,
+      };
+      await storeToPostgreSQL(entry, `session-memory/${slug || dateStr}`, 50, metadata);
+      console.log("[session-memory] Session stored to PostgreSQL (full mode)");
+    } else {
+      // Minimal mode: write to file
+      await fs.mkdir(memoryDir, { recursive: true });
+      await fs.writeFile(memoryFilePath, entry, "utf-8");
+      console.log("[session-memory] Memory file written successfully (minimal mode)");
+      const relPath = memoryFilePath.replace(os.homedir(), "~");
+      console.log(`[session-memory] Session context saved to ${relPath}`);
+    }
   } catch (err) {
     console.error(
       "[session-memory] Failed to save session memory:",
