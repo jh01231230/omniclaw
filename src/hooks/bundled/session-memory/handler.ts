@@ -3,17 +3,45 @@
  *
  * Saves session context to memory when /new command is triggered
  * Creates a new dated memory file with LLM-generated slug
+ * Also supports PostgreSQL storage when configured
  */
 
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import type { OmniClawConfig } from "../../../config/config.js";
 import type { HookHandler } from "../../hooks.js";
 import { resolveAgentWorkspaceDir } from "../../../agents/agent-scope.js";
 import { resolveAgentIdFromSessionKey } from "../../../routing/session-key.js";
 import { resolveHookConfig } from "../../config.js";
+
+/**
+ * PostgreSQL helper for storing memories
+ */
+async function storeToPostgreSQL(
+  content: string,
+  source: string,
+  importance: number = 50,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
+  const { execSync } = await import("child_process");
+  const psqlPath = "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
+  const id = randomUUID();
+  const metadataStr = JSON.stringify(metadata).replace(/'/g, "''");
+  
+  try {
+    const tagsStr = "ARRAY['session-memory']";
+    execSync(
+      `${psqlPath} -U tars -d openclaw_memory -h localhost -p 5432 -c "INSERT INTO memories (id, content, metadata, source, importance, tags, created_at) VALUES ('${id}', E'${content.replace(/'/g, "''")}', '${metadataStr}'::jsonb, '${source}', ${importance}, ${tagsStr}, NOW())"`,
+      { encoding: "utf-8" }
+    );
+    console.log("[session-memory] Stored to PostgreSQL:", id);
+  } catch (err) {
+    console.error("[session-memory] PostgreSQL store error:", err);
+  }
+}
 
 /**
  * Read recent messages from session file for slug generation

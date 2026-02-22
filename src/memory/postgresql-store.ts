@@ -1,7 +1,6 @@
 /**
  * PostgreSQL Memory Store
  * Uses pgvector for semantic search
- * Uses psql command-line tool (no external dependencies)
  */
 
 import { randomUUID } from "crypto";
@@ -34,32 +33,18 @@ export class PostgreSQLMemoryStore {
 
   constructor(config: PostgreSQLMemoryStoreConfig) {
     this.config = config;
-    // Try common psql locations
     this.psqlPath = process.env.PSQL_PATH || "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
   }
 
-  private getConnectionString(): string {
-    const { host, port, database, user, password } = this.config;
-    return `postgresql://${user}${password ? `:${password}` : ''}@${host}:${port}/${database}`;
-  }
-
-  private async runSql(sql: string): Promise<string> {
-    try {
-      const result = execSync(
-        `PSQL_PATH="${this.psqlPath}" ${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -c "${sql.replace(/"/g, '\\"')}"`,
-        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-      );
-      return result;
-    } catch (err: unknown) {
-      const error = err as { message?: string; stderr?: string };
-      throw new Error(`PSQL error: ${error.message || error.stderr || String(err)}`);
-    }
+  private runSql(sql: string): string {
+    return execSync(
+      `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -c "${sql.replace(/"/g, '\\"')}"`,
+      { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+    );
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-
-    // Create tables if not exist (table creation done manually)
     this.initialized = true;
   }
 
@@ -74,42 +59,101 @@ export class PostgreSQLMemoryStore {
     const sql = `INSERT INTO memories (id, content, embedding, metadata, source, importance, tags)
                  VALUES ('${id}', E'${entry.content.replace(/'/g, "''")}', ${embeddingStr}, '${metadataStr}'::jsonb, '${entry.source || 'conversation'}', ${entry.importance || 0}, ${tagsStr})`;
 
-    await this.runSql(sql);
+    this.runSql(sql);
     return id;
   }
 
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (!a.length || !b.length) return 0;
+    const dotProduct = a.reduce((sum, val, i) => sum + val * (b[i] || 0), 0);
+    const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    if (magA === 0 || magB === 0) return 0;
+    return dotProduct / (magA * magB);
+  }
+
   async searchSimilar(queryEmbedding: number[], limit = 10): Promise<MemoryEntry[]> {
-    const embeddingStr = `'[${queryEmbedding.join(",")}]'::vector`;
-    
-    // Use psql to query - extract fields we need
-    const sql = `SELECT id, content, metadata, source, importance, tags, created_at, updated_at,
-                        1 - (embedding <=> ${embeddingStr}) as similarity
-                 FROM memories
-                 WHERE embedding IS NOT NULL
-                 ORDER BY embedding <=> ${embeddingStr}
-                 LIMIT ${limit}`;
-
     try {
-      const result = execSync(
-        `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -F "|" -c "${sql.replace(/"/g, '\\"')}"`,
-        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-      );
+      // Get all memories with embeddings - use JSON format
+      const sql = `SELECT json_build_object(
+        'id', m.id,
+        'content', LEFT(m.content, 500),
+        'metadata', m.metadata::text,
+        'source', m.source,
+        'importance', m.importance,
+        'tags', m.tags::text,
+        'created_at', m.created_at::text,
+        'embedding', m.embedding::text
+      )::text as row
+      FROM memories m
+      WHERE m.embedding IS NOT NULL
+      ORDER BY m.importance DESC
+      LIMIT 50`;
 
+      const result = this.runSql(sql);
+      
       if (!result.trim()) return [];
 
-      return result.trim().split("\n").map(line => {
-        const parts = line.split("|");
-        return {
-          id: parts[0],
-          content: parts[1],
-          metadata: parts[2] ? JSON.parse(parts[2]) : {},
-          source: parts[3],
-          importance: parseInt(parts[4]) || 0,
-          tags: parts[5] ? parts[5].replace(/[{}]/g, "").split(",") : [],
-          createdAt: parts[6] ? new Date(parts[6]) : undefined,
-          updatedAt: parts[7] ? new Date(parts[7]) : undefined,
-        };
-      });
+      // Parse each line as JSON
+      const lines = result.trim().split("\n");
+      const memories: Array<MemoryEntry & { embStr: string }> = [];
+      
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        
+        try {
+          const parsed = JSON.parse(line);
+          memories.push({
+            id: parsed.id,
+            content: parsed.content,
+            metadata: parsed.metadata ? JSON.parse(parsed.metadata) : {},
+            source: parsed.source,
+            importance: parsed.importance,
+            tags: parsed.tags ? parsed.tags.replace(/[{}]/g, "").split(",") : [],
+            createdAt: parsed.created_at ? new Date(parsed.created_at) : undefined,
+            embStr: parsed.embedding,
+          });
+        } catch (e) {
+          // Skip malformed JSON
+          continue;
+        }
+      }
+
+      // Calculate similarity in JavaScript
+      return memories
+        .map(m => {
+          let emb: number[] = [];
+          try {
+            // Parse embedding string like "[0.1,0.2,...]"
+            const embMatch = m.embStr.match(/\[(.*)\]/);
+            if (embMatch) {
+              emb = embMatch[1].split(",").map(Number);
+            }
+          } catch (e) {}
+          
+          return {
+            id: m.id,
+            content: m.content,
+            metadata: m.metadata,
+            source: m.source,
+            importance: m.importance,
+            tags: m.tags,
+            createdAt: m.createdAt,
+            _similarity: this.cosineSimilarity(emb, queryEmbedding),
+          };
+        })
+        .sort((a, b) => b._similarity - a._similarity)
+        .slice(0, limit)
+        .map((m): MemoryEntry => ({
+          id: m.id,
+          content: m.content,
+          metadata: m.metadata,
+          source: m.source,
+          importance: m.importance,
+          tags: m.tags,
+          createdAt: m.createdAt,
+        }));
+        
     } catch (err) {
       console.error("Search error:", err);
       return [];
@@ -117,32 +161,45 @@ export class PostgreSQLMemoryStore {
   }
 
   async getMemories(limit = 100, offset = 0): Promise<MemoryEntry[]> {
-    const sql = `SELECT id, content, metadata, source, importance, tags, created_at, updated_at
-                 FROM memories
-                 ORDER BY importance DESC, created_at DESC
-                 LIMIT ${limit} OFFSET ${offset}`;
+    const sql = `SELECT json_build_object(
+      'id', id,
+      'content', LEFT(content, 500),
+      'metadata', metadata::text,
+      'source', source,
+      'importance', importance,
+      'tags', tags::text,
+      'created_at', created_at::text,
+      'updated_at', updated_at::text
+    )::text as row
+    FROM memories
+    ORDER BY importance DESC, created_at DESC
+    LIMIT ${limit} OFFSET ${offset}`;
 
     try {
-      const result = execSync(
-        `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -F "|" -c "${sql.replace(/"/g, '\\"')}"`,
-        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
-      );
-
+      const result = this.runSql(sql);
       if (!result.trim()) return [];
 
-      return result.trim().split("\n").map(line => {
-        const parts = line.split("|");
-        return {
-          id: parts[0],
-          content: parts[1],
-          metadata: parts[2] ? JSON.parse(parts[2]) : {},
-          source: parts[3],
-          importance: parseInt(parts[4]) || 0,
-          tags: parts[5] ? parts[5].replace(/[{}]/g, "").split(",") : [],
-          createdAt: parts[6] ? new Date(parts[6]) : undefined,
-          updatedAt: parts[7] ? new Date(parts[7]) : undefined,
-        };
-      });
+      const lines = result.trim().split("\n");
+      return lines
+        .filter(l => l.trim())
+        .map(line => {
+          try {
+            const parsed = JSON.parse(line);
+            return {
+              id: parsed.id,
+              content: parsed.content,
+              metadata: parsed.metadata ? JSON.parse(parsed.metadata) : {},
+              source: parsed.source,
+              importance: parsed.importance,
+              tags: parsed.tags ? parsed.tags.replace(/[{}]/g, "").split(",") : [],
+              createdAt: parsed.created_at ? new Date(parsed.created_at) : undefined,
+              updatedAt: parsed.updated_at ? new Date(parsed.updated_at) : undefined,
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(Boolean) as MemoryEntry[];
     } catch (err) {
       console.error("GetMemories error:", err);
       return [];
@@ -150,15 +207,11 @@ export class PostgreSQLMemoryStore {
   }
 
   async count(): Promise<number> {
-    const result = execSync(
-      `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -c "SELECT COUNT(*) FROM memories"`,
-      { encoding: "utf-8" }
-    );
+    const result = this.runSql("SELECT COUNT(*) FROM memories");
     return parseInt(result.trim()) || 0;
   }
 
   async close(): Promise<void> {
-    // No persistent connection to close
     this.initialized = false;
   }
 }

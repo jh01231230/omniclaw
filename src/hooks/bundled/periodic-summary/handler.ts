@@ -1,9 +1,32 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { HookHandler, InternalHookEvent } from "../../hooks.js";
 import { loadConfig } from "../../../config/config.js";
 import { resolveStateDir } from "../../../config/paths.js";
+
+/**
+ * Store summary to PostgreSQL
+ */
+async function storeSummaryToPostgreSQL(
+  content: string,
+  source: string = "periodic-summary",
+): Promise<void> {
+  const { execSync } = await import("child_process");
+  const psqlPath = "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
+  const id = randomUUID();
+  
+  try {
+    execSync(
+      `${psqlPath} -U tars -d openclaw_memory -h localhost -p 5432 -c "INSERT INTO memories (id, content, metadata, source, importance, tags, created_at) VALUES ('${id}', E'${content.replace(/'/g, "''")}', '{}'::jsonb, '${source}', 30, ARRAY['periodic-summary', 'auto-generated'], NOW())"`,
+      { encoding: "utf-8" }
+    );
+    console.log("[periodic-summary] Stored to PostgreSQL:", id);
+  } catch (err) {
+    console.error("[periodic-summary] PostgreSQL store error:", err);
+  }
+}
 
 /**
  * Periodic Memory Summarization Hook
@@ -100,6 +123,13 @@ ${prompt}
     await fs.appendFile(outputPath, summaryEntry + "\n\n");
 
     console.log("[periodic-summary] Summary saved to:", outputPath);
+    
+    // Also store to PostgreSQL if configured
+    const memoryCfg = memorySearch as { store?: { driver?: string } } | undefined;
+    const storeDriver = memoryCfg?.store?.driver;
+    if (storeDriver === "postgresql") {
+      await storeSummaryToPostgreSQL(summaryEntry, "periodic-summary");
+    }
   } catch (err) {
     console.error("[periodic-summary] Error:", err);
   }
