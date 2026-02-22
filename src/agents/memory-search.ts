@@ -192,11 +192,23 @@ function mergeConfig(
     extensionPath:
       overrides?.store?.vector?.extensionPath ?? defaults?.store?.vector?.extensionPath,
   };
-  const store = {
-    driver: overrides?.store?.driver ?? defaults?.store?.driver ?? "sqlite",
-    path: resolveStorePath(agentId, overrides?.store?.path ?? defaults?.store?.path),
-    vector,
-  };
+  const storeDriver = overrides?.store?.driver ?? defaults?.store?.driver ?? "sqlite";
+  const store =
+    storeDriver === "postgresql"
+      ? {
+          driver: "postgresql" as const,
+          host: overrides?.store?.host ?? defaults?.store?.host ?? "localhost",
+          port: overrides?.store?.port ?? defaults?.store?.port ?? 5432,
+          database: overrides?.store?.database ?? defaults?.store?.database ?? "openclaw_memory",
+          user: overrides?.store?.user ?? defaults?.store?.user ?? "tars",
+          password: overrides?.store?.password ?? defaults?.store?.password,
+          vector,
+        }
+      : {
+          driver: "sqlite" as const,
+          path: resolveStorePath(agentId, overrides?.store?.path ?? defaults?.store?.path),
+          vector,
+        };
   const chunking = {
     tokens: overrides?.chunking?.tokens ?? defaults?.chunking?.tokens ?? DEFAULT_CHUNK_TOKENS,
     overlap: overrides?.chunking?.overlap ?? defaults?.chunking?.overlap ?? DEFAULT_CHUNK_OVERLAP,
