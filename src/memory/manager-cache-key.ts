@@ -38,7 +38,7 @@ export function computeMemoryManagerCacheKey(params: {
       experimental: settings.experimental,
       store: {
         driver: settings.store.driver,
-        path: settings.store.path,
+        path: "path" in settings.store ? settings.store.path : "",
         vector: {
           enabled: settings.store.vector.enabled,
           extensionPath: settings.store.vector.extensionPath,

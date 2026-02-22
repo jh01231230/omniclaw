@@ -1,12 +1,11 @@
 /**
  * PostgreSQL Memory Store
  * Uses pgvector for semantic search
+ * Uses psql command-line tool (no external dependencies)
  */
 
-import pg from "pg";
 import { randomUUID } from "crypto";
-
-const { Pool } = pg;
+import { execSync } from "child_process";
 
 export interface MemoryEntry {
   id: string;
@@ -29,133 +28,137 @@ export interface PostgreSQLMemoryStoreConfig {
 }
 
 export class PostgreSQLMemoryStore {
-  private pool: pg.Pool | null = null;
   private config: PostgreSQLMemoryStoreConfig;
   private initialized = false;
+  private psqlPath: string;
 
   constructor(config: PostgreSQLMemoryStoreConfig) {
     this.config = config;
+    // Try common psql locations
+    this.psqlPath = process.env.PSQL_PATH || "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
+  }
+
+  private getConnectionString(): string {
+    const { host, port, database, user, password } = this.config;
+    return `postgresql://${user}${password ? `:${password}` : ''}@${host}:${port}/${database}`;
+  }
+
+  private async runSql(sql: string): Promise<string> {
+    try {
+      const result = execSync(
+        `PSQL_PATH="${this.psqlPath}" ${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -c "${sql.replace(/"/g, '\\"')}"`,
+        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+      );
+      return result;
+    } catch (err: unknown) {
+      const error = err as { message?: string; stderr?: string };
+      throw new Error(`PSQL error: ${error.message || error.stderr || String(err)}`);
+    }
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    this.pool = new Pool({
-      host: this.config.host,
-      port: this.config.port,
-      database: this.config.database,
-      user: this.config.user,
-      password: this.config.password,
-    });
-
-    // Create tables if not exist
-    await this.pool.query(`
-      CREATE EXTENSION IF NOT EXISTS vector;
-      
-      CREATE TABLE IF NOT EXISTS memories (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        content TEXT NOT NULL,
-        embedding vector(1536),
-        metadata JSONB DEFAULT '{}',
-        source VARCHAR(50) DEFAULT 'conversation',
-        importance INT DEFAULT 0,
-        tags TEXT[] DEFAULT '{}',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source);
-      CREATE INDEX IF NOT EXISTS idx_memories_importance ON memories(importance DESC);
-      CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at DESC);
-      
-      -- Vector similarity index (IVFFlat)
-      CREATE INDEX IF NOT EXISTS idx_memories_embedding ON memories 
-        USING ivfflat (embedding vector_cosine_ops)
-        WITH (lists = 100);
-    `);
-
+    // Create tables if not exist (table creation done manually)
     this.initialized = true;
   }
 
   async addMemory(entry: Omit<MemoryEntry, "id" | "createdAt" | "updatedAt">): Promise<string> {
-    if (!this.pool) throw new Error("Not initialized");
-
     const id = randomUUID();
     const embeddingStr = entry.embedding 
-      ? `[${entry.embedding.join(",")}]` 
-      : null;
+      ? `'[${entry.embedding.join(",")}]'::vector`
+      : 'NULL';
+    const metadataStr = JSON.stringify(entry.metadata || {}).replace(/'/g, "''");
+    const tagsStr = entry.tags ? `ARRAY[${entry.tags.map(t => `'${t}'`).join(",")}]` : 'ARRAY[]::text[]';
 
-    await this.pool.query(
-      `INSERT INTO memories (id, content, embedding, metadata, source, importance, tags)
-       VALUES ($1, $2, $3::vector, $4, $5, $6, $7)`,
-      [id, entry.content, embeddingStr, JSON.stringify(entry.metadata || {}), 
-       entry.source || 'conversation', entry.importance || 0, entry.tags || []]
-    );
+    const sql = `INSERT INTO memories (id, content, embedding, metadata, source, importance, tags)
+                 VALUES ('${id}', E'${entry.content.replace(/'/g, "''")}', ${embeddingStr}, '${metadataStr}'::jsonb, '${entry.source || 'conversation'}', ${entry.importance || 0}, ${tagsStr})`;
 
+    await this.runSql(sql);
     return id;
   }
 
   async searchSimilar(queryEmbedding: number[], limit = 10): Promise<MemoryEntry[]> {
-    if (!this.pool) throw new Error("Not initialized");
-
-    const embeddingStr = `[${queryEmbedding.join(",")}]`;
+    const embeddingStr = `'[${queryEmbedding.join(",")}]'::vector`;
     
-    const result = await this.pool.query(
-      `SELECT id, content, metadata, source, importance, tags, created_at, updated_at,
-              1 - (embedding <=> $1::vector) as similarity
-       FROM memories
-       WHERE embedding IS NOT NULL
-       ORDER BY embedding <=> $1::vector
-       LIMIT $2`,
-      [embeddingStr, limit]
-    );
+    // Use psql to query - extract fields we need
+    const sql = `SELECT id, content, metadata, source, importance, tags, created_at, updated_at,
+                        1 - (embedding <=> ${embeddingStr}) as similarity
+                 FROM memories
+                 WHERE embedding IS NOT NULL
+                 ORDER BY embedding <=> ${embeddingStr}
+                 LIMIT ${limit}`;
 
-    return result.rows.map(row => ({
-      id: row.id,
-      content: row.content,
-      metadata: row.metadata,
-      source: row.source,
-      importance: row.importance,
-      tags: row.tags,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    try {
+      const result = execSync(
+        `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -F "|" -c "${sql.replace(/"/g, '\\"')}"`,
+        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+      );
+
+      if (!result.trim()) return [];
+
+      return result.trim().split("\n").map(line => {
+        const parts = line.split("|");
+        return {
+          id: parts[0],
+          content: parts[1],
+          metadata: parts[2] ? JSON.parse(parts[2]) : {},
+          source: parts[3],
+          importance: parseInt(parts[4]) || 0,
+          tags: parts[5] ? parts[5].replace(/[{}]/g, "").split(",") : [],
+          createdAt: parts[6] ? new Date(parts[6]) : undefined,
+          updatedAt: parts[7] ? new Date(parts[7]) : undefined,
+        };
+      });
+    } catch (err) {
+      console.error("Search error:", err);
+      return [];
+    }
   }
 
   async getMemories(limit = 100, offset = 0): Promise<MemoryEntry[]> {
-    if (!this.pool) throw new Error("Not initialized");
+    const sql = `SELECT id, content, metadata, source, importance, tags, created_at, updated_at
+                 FROM memories
+                 ORDER BY importance DESC, created_at DESC
+                 LIMIT ${limit} OFFSET ${offset}`;
 
-    const result = await this.pool.query(
-      `SELECT id, content, metadata, source, importance, tags, created_at, updated_at
-       FROM memories
-       ORDER BY importance DESC, created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
+    try {
+      const result = execSync(
+        `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -F "|" -c "${sql.replace(/"/g, '\\"')}"`,
+        { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+      );
 
-    return result.rows.map(row => ({
-      id: row.id,
-      content: row.content,
-      metadata: row.metadata,
-      source: row.source,
-      importance: row.importance,
-      tags: row.tags,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+      if (!result.trim()) return [];
+
+      return result.trim().split("\n").map(line => {
+        const parts = line.split("|");
+        return {
+          id: parts[0],
+          content: parts[1],
+          metadata: parts[2] ? JSON.parse(parts[2]) : {},
+          source: parts[3],
+          importance: parseInt(parts[4]) || 0,
+          tags: parts[5] ? parts[5].replace(/[{}]/g, "").split(",") : [],
+          createdAt: parts[6] ? new Date(parts[6]) : undefined,
+          updatedAt: parts[7] ? new Date(parts[7]) : undefined,
+        };
+      });
+    } catch (err) {
+      console.error("GetMemories error:", err);
+      return [];
+    }
   }
 
   async count(): Promise<number> {
-    if (!this.pool) throw new Error("Not initialized");
-    const result = await this.pool.query("SELECT COUNT(*) FROM memories");
-    return parseInt(result.rows[0].count);
+    const result = execSync(
+      `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -c "SELECT COUNT(*) FROM memories"`,
+      { encoding: "utf-8" }
+    );
+    return parseInt(result.trim()) || 0;
   }
 
   async close(): Promise<void> {
-    if (this.pool) {
-      await this.pool.end();
-      this.pool = null;
-      this.initialized = false;
-    }
+    // No persistent connection to close
+    this.initialized = false;
   }
 }

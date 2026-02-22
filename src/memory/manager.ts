@@ -140,7 +140,7 @@ export class MemoryIndexManager {
   private batchFailureLastError?: string;
   private batchFailureLastProvider?: string;
   private batchFailureLock: Promise<void> = Promise.resolve();
-  private db: DatabaseSync;
+  private db!: DatabaseSync;
   private pgStore: PostgreSQLMemoryStore | null = null;
   private readonly usePostgreSQL: boolean;
   private readonly sources: Set<MemorySource>;
@@ -238,7 +238,7 @@ export class MemoryIndexManager {
     
     if (this.usePostgreSQL) {
       // Initialize PostgreSQL store
-      const pgConfig = params.settings.store;
+      const pgConfig = params.settings.store as { driver: "postgresql"; host: string; port: number; database: string; user: string; password?: string };
       this.pgStore = new PostgreSQLMemoryStore({
         host: pgConfig.host,
         port: pgConfig.port,
@@ -313,13 +313,13 @@ export class MemoryIndexManager {
         await this.pgStore.initialize();
         const queryVec = await this.embedQueryWithTimeout(query);
         const memories = await this.pgStore.searchSimilar(queryVec, opts?.maxResults ?? 10);
-        return memories.map((m: MemoryEntry) => ({
-          path: m.metadata?.file || m.id,
+        return memories.map((m: MemoryEntry): MemorySearchResult => ({
+          path: String(m.metadata?.file || m.id),
           startLine: 1,
           endLine: 100,
           score: 0.9, // PostgreSQL returns unscaled similarity
           snippet: m.content?.slice(0, 500) || "",
-          source: m.source || "memory",
+          source: (m.source || "memory") as MemorySearchResult["source"],
         }));
       } catch (err) {
         log.warn(`PostgreSQL search failed: ${err}`);
@@ -559,19 +559,24 @@ export class MemoryIndexManager {
   } {
     // PostgreSQL status
     if (this.usePostgreSQL) {
+      const pg = this.settings.store as { driver: "postgresql"; host: string; port: number; database: string };
       return {
         files: 0,
         chunks: 0,
         dirty: this.dirty,
         workspaceDir: this.workspaceDir,
-        dbPath: `postgresql://${this.settings.store.host}:${this.settings.store.port}/${this.settings.store.database}`,
+        dbPath: `postgresql://${pg.host}:${pg.port}/${pg.database}`,
         provider: this.provider.id,
         model: this.provider.model,
         requestedProvider: this.requestedProvider,
         sources: Array.from(this.sources),
         extraPaths: this.settings.extraPaths,
         sourceCounts: [],
-        vector: this.vector,
+        vector: {
+          enabled: this.vector.enabled,
+          available: this.vector.available ?? undefined,
+          dims: this.vector.dims,
+        },
       };
     }
     
@@ -622,7 +627,12 @@ export class MemoryIndexManager {
       chunks: chunks?.c ?? 0,
       dirty: this.dirty,
       workspaceDir: this.workspaceDir,
-      dbPath: this.settings.store.path,
+      dbPath: this.usePostgreSQL 
+        ? (() => {
+            const pg = this.settings.store as { driver: "postgresql"; host: string; port: number; database: string };
+            return `postgresql://${pg.host}:${pg.port}/${pg.database}`;
+          })()
+        : (this.settings.store as { driver: "sqlite"; path: string }).path,
       provider: this.provider.id,
       model: this.provider.model,
       requestedProvider: this.requestedProvider,
@@ -808,7 +818,12 @@ export class MemoryIndexManager {
   }
 
   private openDatabase(): DatabaseSync {
-    const dbPath = resolveUserPath(this.settings.store.path);
+    if (this.usePostgreSQL) {
+      // PostgreSQL doesn't use SQLite database
+      throw new Error("PostgreSQL driver doesn't use SQLite");
+    }
+    const store = this.settings.store as { driver: "sqlite"; path: string; vector: { enabled: boolean; extensionPath?: string } };
+    const dbPath = resolveUserPath(store.path);
     return this.openDatabaseAtPath(dbPath);
   }
 
@@ -816,7 +831,8 @@ export class MemoryIndexManager {
     const dir = path.dirname(dbPath);
     ensureDir(dir);
     const { DatabaseSync } = requireNodeSqlite();
-    return new DatabaseSync(dbPath, { allowExtension: this.settings.store.vector.enabled });
+    const store = this.settings.store as { driver: "sqlite"; vector: { enabled: boolean; extensionPath?: string } };
+    return new DatabaseSync(dbPath, { allowExtension: store.vector.enabled });
   }
 
   private seedEmbeddingCache(sourceDb: DatabaseSync): void {
@@ -1511,7 +1527,12 @@ export class MemoryIndexManager {
     force?: boolean;
     progress?: MemorySyncProgressState;
   }): Promise<void> {
-    const dbPath = resolveUserPath(this.settings.store.path);
+    if (this.usePostgreSQL) {
+      log.warn("runSafeReindex: not supported with PostgreSQL driver");
+      return;
+    }
+    const store = this.settings.store as { driver: "sqlite"; path: string };
+    const dbPath = resolveUserPath(store.path);
     const tempDbPath = `${dbPath}.tmp-${randomUUID()}`;
     const tempDb = this.openDatabaseAtPath(tempDbPath);
 

@@ -192,23 +192,27 @@ function mergeConfig(
     extensionPath:
       overrides?.store?.vector?.extensionPath ?? defaults?.store?.vector?.extensionPath,
   };
-  const storeDriver = overrides?.store?.driver ?? defaults?.store?.driver ?? "sqlite";
-  const store =
-    storeDriver === "postgresql"
-      ? {
-          driver: "postgresql" as const,
-          host: overrides?.store?.host ?? defaults?.store?.host ?? "localhost",
-          port: overrides?.store?.port ?? defaults?.store?.port ?? 5432,
-          database: overrides?.store?.database ?? defaults?.store?.database ?? "openclaw_memory",
-          user: overrides?.store?.user ?? defaults?.store?.user ?? "tars",
-          password: overrides?.store?.password ?? defaults?.store?.password,
-          vector,
-        }
-      : {
-          driver: "sqlite" as const,
-          path: resolveStorePath(agentId, overrides?.store?.path ?? defaults?.store?.path),
-          vector,
-        };
+  const storeDriver = (overrides?.store?.driver ?? defaults?.store?.driver ?? "sqlite") as string;
+  const overridesStore = overrides?.store as Record<string, unknown> | undefined;
+  const defaultsStore = defaults?.store as Record<string, unknown> | undefined;
+  let store: ResolvedMemorySearchConfig["store"];
+  if (storeDriver === "postgresql") {
+    store = {
+      driver: "postgresql",
+      host: (overridesStore?.host as string) ?? (defaultsStore?.host as string) ?? "localhost",
+      port: (overridesStore?.port as number) ?? (defaultsStore?.port as number) ?? 5432,
+      database: (overridesStore?.database as string) ?? (defaultsStore?.database as string) ?? "openclaw_memory",
+      user: (overridesStore?.user as string) ?? (defaultsStore?.user as string) ?? "tars",
+      password: (overridesStore?.password as string) ?? (defaultsStore?.password as string),
+      vector,
+    };
+  } else {
+    store = {
+      driver: "sqlite",
+      path: resolveStorePath(agentId, (overridesStore?.path as string) ?? (defaultsStore?.path as string)),
+      vector,
+    };
+  }
   const chunking = {
     tokens: overrides?.chunking?.tokens ?? defaults?.chunking?.tokens ?? DEFAULT_CHUNK_TOKENS,
     overlap: overrides?.chunking?.overlap ?? defaults?.chunking?.overlap ?? DEFAULT_CHUNK_OVERLAP,
