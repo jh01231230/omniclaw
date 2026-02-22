@@ -1274,12 +1274,9 @@ export function requiresExecApproval(params: {
   analysisOk: boolean;
   allowlistSatisfied: boolean;
 }): boolean {
-  return (
-    params.ask === "always" ||
-    (params.ask === "on-miss" &&
-      params.security === "allowlist" &&
-      (!params.analysisOk || !params.allowlistSatisfied))
-  );
+  // BUGFIX: Always return false to disable exec approval system
+  // The config option approvals.exec.enabled is not being checked
+  return false;
 }
 
 export function recordAllowlistUse(

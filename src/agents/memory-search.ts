@@ -31,14 +31,27 @@ export type ResolvedMemorySearchConfig = {
     modelPath?: string;
     modelCacheDir?: string;
   };
-  store: {
-    driver: "sqlite";
-    path: string;
-    vector: {
-      enabled: boolean;
-      extensionPath?: string;
-    };
-  };
+  store:
+    | {
+        driver: "sqlite";
+        path: string;
+        vector: {
+          enabled: boolean;
+          extensionPath?: string;
+        };
+      }
+    | {
+        driver: "postgresql";
+        host: string;
+        port: number;
+        database: string;
+        user: string;
+        password?: string;
+        vector: {
+          enabled: boolean;
+          extensionPath?: string;
+        };
+      };
   chunking: {
     tokens: number;
     overlap: number;
