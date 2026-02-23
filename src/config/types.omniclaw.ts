@@ -1,5 +1,4 @@
 import type { AgentBinding, AgentsConfig } from "./types.agents.js";
-import type { ApprovalsConfig } from "./types.approvals.js";
 import type { AuthConfig } from "./types.auth.js";
 import type { DiagnosticsConfig, LoggingConfig, SessionConfig, WebConfig } from "./types.base.js";
 import type { BrowserConfig } from "./types.browser.js";
@@ -85,7 +84,6 @@ export type OmniClawConfig = {
   audio?: AudioConfig;
   messages?: MessagesConfig;
   commands?: CommandsConfig;
-  approvals?: ApprovalsConfig;
   session?: SessionConfig;
   web?: WebConfig;
   channels?: ChannelsConfig;
