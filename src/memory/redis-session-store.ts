@@ -1,12 +1,12 @@
 /**
  * Redis Session Store - Short-term conversation storage
- * 
+ *
  * Stores recent conversation messages in Redis for quick access
  * and provides archiving to PostgreSQL for long-term storage
  */
 
-import { createClient, RedisClientType } from "redis";
 import { randomUUID } from "node:crypto";
+import { createClient, RedisClientType } from "redis";
 
 export interface SessionMessage {
   id: string;
@@ -28,8 +28,8 @@ export interface RedisSessionStoreConfig {
   port: number;
   db?: number;
   sessionPrefix?: string;
-  maxMessages?: number;  // Max messages per session in Redis
-  ttlSeconds?: number;   // TTL for session data
+  maxMessages?: number; // Max messages per session in Redis
+  ttlSeconds?: number; // TTL for session data
 }
 
 const DEFAULT_CONFIG: Required<RedisSessionStoreConfig> = {
@@ -46,8 +46,8 @@ export class RedisSessionStore {
   private config: Required<RedisSessionStoreConfig>;
   private connected: boolean = false;
 
-  constructor(config: RedisSessionStoreConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+  constructor(config?: Partial<RedisSessionStoreConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...(config ?? {}) };
   }
 
   /**
@@ -67,7 +67,7 @@ export class RedisSessionStore {
         database: this.config.db,
       });
 
-      this.client.on("error", (err) => {
+      this.client.on("error", (err: unknown) => {
         console.error("[redis-session-store] Redis error:", err);
       });
 
@@ -113,13 +113,13 @@ export class RedisSessionStore {
     };
 
     const redisKey = this.getSessionKey(sessionKey);
-    
+
     // Push message to the end of the list
-    await this.client!.lpush(redisKey, JSON.stringify(fullMessage));
-    
+    await this.client!.lPush(redisKey, JSON.stringify(fullMessage));
+
     // Trim to max messages
-    await this.client!.ltrim(redisKey, 0, this.config.maxMessages - 1);
-    
+    await this.client!.lTrim(redisKey, 0, this.config.maxMessages - 1);
+
     // Update TTL
     await this.client!.expire(redisKey, this.config.ttlSeconds);
 
@@ -135,9 +135,9 @@ export class RedisSessionStore {
     }
 
     const redisKey = this.getSessionKey(sessionKey);
-    const messages = await this.client!.lrange(redisKey, 0, limit - 1);
-    
-    return messages.map((msg) => JSON.parse(msg) as SessionMessage).reverse();
+    const messages = await this.client!.lRange(redisKey, 0, limit - 1);
+
+    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).reverse();
   }
 
   /**
@@ -149,22 +149,24 @@ export class RedisSessionStore {
     }
 
     const redisKey = this.getSessionKey(sessionKey);
-    const messages = await this.client!.lrange(redisKey, 0, -1);
-    
-    return messages.map((msg) => JSON.parse(msg) as SessionMessage).reverse();
+    const messages = await this.client!.lRange(redisKey, 0, -1);
+
+    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).reverse();
   }
 
   /**
    * Get session metadata
    */
-  async getSessionInfo(sessionKey: string): Promise<{ createdAt: string; updatedAt: string; messageCount: number } | null> {
+  async getSessionInfo(
+    sessionKey: string,
+  ): Promise<{ createdAt: string; updatedAt: string; messageCount: number } | null> {
     if (!this.client) {
       await this.connect();
     }
 
     const redisKey = this.getSessionKey(sessionKey);
     const exists = await this.client!.exists(redisKey);
-    
+
     if (!exists) {
       return null;
     }
@@ -172,7 +174,7 @@ export class RedisSessionStore {
     const ttl = await this.client!.ttl(redisKey);
     const createdAt = new Date(Date.now() - (this.config.ttlSeconds - ttl) * 1000).toISOString();
     const updatedAt = new Date().toISOString();
-    const messageCount = await this.client!.llen(redisKey);
+    const messageCount = await this.client!.lLen(redisKey);
 
     return { createdAt, updatedAt, messageCount };
   }
@@ -198,7 +200,7 @@ export class RedisSessionStore {
     }
 
     const keys = await this.client!.keys(`${this.config.sessionPrefix}*`);
-    return keys.map((key) => key.replace(this.config.sessionPrefix, ""));
+    return keys.map((key: string) => key.replace(this.config.sessionPrefix, ""));
   }
 
   /**
@@ -224,7 +226,7 @@ export class RedisSessionStore {
 // Singleton instance
 let storeInstance: RedisSessionStore | null = null;
 
-export function getRedisSessionStore(config?: RedisSessionStoreConfig): RedisSessionStore {
+export function getRedisSessionStore(config?: Partial<RedisSessionStoreConfig>): RedisSessionStore {
   if (!storeInstance) {
     storeInstance = new RedisSessionStore(config);
   }

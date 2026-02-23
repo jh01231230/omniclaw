@@ -1,14 +1,14 @@
 /**
  * Session Capture Hook
- * 
+ *
  * Captures conversation messages in real-time and stores them to Redis
  * for short-term storage. Sessions are later archived to PostgreSQL
  * for long-term memory.
  */
 
+import type { OmniClawConfig } from "../../../config/config.js";
 import type { HookHandler, HookEvent } from "../../hooks.js";
 import { getRedisSessionStore, type SessionMessage } from "../../../memory/redis-session-store.js";
-import type { OmniClawConfig } from "../../../config/config.js";
 
 interface SessionCaptureConfig {
   enabled?: boolean;
@@ -84,17 +84,18 @@ function extractTextContent(content: unknown): string {
  * Session capture handler - stores messages to Redis in real-time
  */
 const captureSessionMessage: HookHandler = async (event: HookEvent): Promise<void> => {
-  // Only capture message events
-  if (event.type !== "message") {
+  // Only capture message events (future: InternalHookEventType may add "message")
+  const ev = event as { type?: string; message?: unknown };
+  if (ev.type !== "message") {
     return;
   }
 
   try {
     const context = event.context || {};
     const cfg = context.cfg as OmniClawConfig | undefined;
-    
+
     const sessionCaptureConfig = getSessionCaptureConfig(cfg);
-    
+
     if (!sessionCaptureConfig.enabled) {
       return;
     }
@@ -106,7 +107,7 @@ const captureSessionMessage: HookHandler = async (event: HookEvent): Promise<voi
     }
 
     // Get message data from event
-    const messageData = event.message as Record<string, unknown> | undefined;
+    const messageData = ev.message as Record<string, unknown> | undefined;
     if (!messageData) {
       return;
     }
@@ -136,7 +137,9 @@ const captureSessionMessage: HookHandler = async (event: HookEvent): Promise<voi
     const redisStore = getRedisSessionStore(sessionCaptureConfig.redis);
     await redisStore.addMessage(sessionKey, sessionMessage);
 
-    console.log(`[session-capture] Stored ${role} message to session: ${sessionKey.substring(0, 20)}...`);
+    console.log(
+      `[session-capture] Stored ${role} message to session: ${sessionKey.substring(0, 20)}...`,
+    );
   } catch (err) {
     console.error("[session-capture] Error capturing message:", err);
   }
