@@ -247,7 +247,7 @@ export function pushBranch(
   cwd?: string,
 ): { success: boolean; error?: string } {
   const branch = branchName || getCurrentBranch(cwd);
-  taskLog(taskId, "PUSH", `Pushing branch: ${branch}`);
+  taskLog(taskId, "PUSHED", `Pushing branch: ${branch}`);
 
   try {
     const workDir = cwd || process.cwd();
@@ -258,7 +258,7 @@ export function pushBranch(
     }
 
     execSync(`git push -u origin ${branch}`, { cwd: gitRoot, stdio: "pipe" });
-    taskLog(taskId, "PUSH", `Branch pushed: ${branch}`);
+    taskLog(taskId, "PUSHED", `Branch pushed: ${branch}`);
     return { success: true };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

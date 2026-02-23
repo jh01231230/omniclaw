@@ -371,6 +371,8 @@ export async function runEmbeddedPiAgent(
 
           if (promptError && !aborted) {
             const errorText = describeUnknownError(promptError);
+            // Log prompt error for debugging
+            log.warn(`LLM prompt error: ${errorText}`);
             if (isContextOverflowError(errorText)) {
               const isCompactionFailure = isCompactionFailureError(errorText);
               // Attempt auto-compaction on context overflow (not compaction_failure)
@@ -538,6 +540,10 @@ export async function runEmbeddedPiAgent(
           const rateLimitFailure = isRateLimitAssistantError(lastAssistant);
           const failoverFailure = isFailoverAssistantError(lastAssistant);
           const assistantFailoverReason = classifyFailoverReason(lastAssistant?.errorMessage ?? "");
+          // Log raw error message for debugging
+          if (lastAssistant?.errorMessage) {
+            log.warn(`LLM error raw: ${lastAssistant.errorMessage}`);
+          }
           const cloudCodeAssistFormatError = attempt.cloudCodeAssistFormatError;
           const imageDimensionError = parseImageDimensionError(lastAssistant?.errorMessage ?? "");
 

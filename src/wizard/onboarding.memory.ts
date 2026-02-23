@@ -31,7 +31,7 @@ export interface MemoryDeploymentConfig {
  */
 function detectPlatform(): { isLinux: boolean; isMac: boolean; isArm: boolean } {
   const platform = process.platform;
-  const arch = process.arch;
+  const arch = process.arch as string;
   return {
     isLinux: platform === "linux",
     isMac: platform === "darwin",
@@ -165,7 +165,7 @@ export async function autoInstallMemoryServices(
     try {
       const pgCtl = path.join(psqlPath, "pg_ctl");
       if (fs.existsSync(pgCtl)) {
-        execSync(`${pgCtl -D "${dataPath}" status || ${pgCtl} -D "${dataPath}" start -w`, {
+        execSync(`"${pgCtl}" -D "${dataPath}" status || "${pgCtl}" -D "${dataPath}" start -w`, {
           stdio: "pipe",
         });
       }
@@ -193,7 +193,7 @@ export async function autoInstallMemoryServices(
     postgresql: {
       host: "localhost",
       port: 5432,
-      database: "openclaw_memory",
+      database: "long_term_db",
       user: isMac ? os.userInfo().username : "postgres",
       password: "",
       installPath,
@@ -279,7 +279,8 @@ export async function promptCredentialsSetup(
 }
 
 /**
- * Initialize full memory schema (long_term_memory, distilled_experience, memory_metadata)
+ * Initialize full memory schema with TARS Memory design
+ * Uses schemas: long_term, metadata, credentials
  * Requires pgvector extension to be installed
  */
 export async function initializeMemorySchema(
@@ -291,43 +292,58 @@ export async function initializeMemorySchema(
 
   try {
     const schemaSQL = `
+-- Create schemas
+CREATE SCHEMA IF NOT EXISTS long_term;
+CREATE SCHEMA IF NOT EXISTS metadata;
+CREATE SCHEMA IF NOT EXISTS credentials;
+
+-- Enable vector extension
 DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; EXCEPTION WHEN duplicate_object THEN null; END
 $$;
 
-CREATE TABLE IF NOT EXISTS long_term_memory (
+-- long_term schema: 长期记忆
+CREATE TABLE IF NOT EXISTS long_term.memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT NOT NULL,
-    embedding VECTOR(1536),
-    metadata JSONB DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT NOW(),
-    importance_score FLOAT DEFAULT 0.5,
-    detail_level VARCHAR(20) DEFAULT 'detail'
+    embedding vector(1536),
+    importance INTEGER DEFAULT 0,
+    detail_level INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    last_accessed TIMESTAMPTZ DEFAULT now(),
+    access_count INTEGER DEFAULT 0,
+    needs_embedding BOOLEAN DEFAULT true
 );
 
-CREATE INDEX IF NOT EXISTS idx_long_term_memory_embedding 
-ON long_term_memory USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+CREATE INDEX IF NOT EXISTS idx_memories_created_at ON long_term.memories(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_importance ON long_term.memories(importance DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_embedding ON long_term.memories USING ivfflat(embedding vector_cosine_ops) WITH (lists=100);
+CREATE INDEX IF NOT EXISTS idx_memories_detail_level ON long_term.memories(detail_level);
 
-CREATE TABLE IF NOT EXISTS distilled_experience (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pattern TEXT NOT NULL,
-    context_pattern TEXT,
-    success_rate FLOAT DEFAULT 0.5,
-    times_used INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
-    last_used TIMESTAMP DEFAULT NOW()
+-- metadata schema: 元数据
+CREATE TABLE IF NOT EXISTS metadata.tags (
+    id SERIAL PRIMARY KEY,
+    memory_id UUID REFERENCES long_term.memories(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_tags_memory_id ON metadata.tags(memory_id);
+CREATE INDEX IF NOT EXISTS idx_tags_tag ON metadata.tags(tag);
 
-CREATE TABLE IF NOT EXISTS memory_metadata (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    memory_id UUID REFERENCES long_term_memory(id) ON DELETE CASCADE,
-    source_session UUID,
-    tags JSONB DEFAULT '[]',
-    last_accessed TIMESTAMP DEFAULT NOW(),
-    access_count INT DEFAULT 0
+CREATE TABLE IF NOT EXISTS metadata.access_log (
+    id SERIAL PRIMARY KEY,
+    memory_id UUID REFERENCES long_term.memories(id) ON DELETE CASCADE,
+    accessed_at TIMESTAMPTZ DEFAULT now(),
+    session_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_access_log_memory_id ON metadata.access_log(memory_id);
+CREATE INDEX IF NOT EXISTS idx_access_log_accessed_at ON metadata.access_log(accessed_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_memory_metadata_session ON memory_metadata (source_session);
-CREATE INDEX IF NOT EXISTS idx_memory_metadata_tags ON memory_metadata USING gin (tags);
+-- credentials schema: 安全数据
+CREATE TABLE IF NOT EXISTS credentials.secrets (
+    id SERIAL PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,
+    value_encrypted TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
 `.replace(/\n/g, " ");
 
     execSync(`psql -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "${schemaSQL}"`, {
@@ -463,12 +479,14 @@ export async function promptMemoryDeployment(
 
         // Create database if needed
         if (installResult.postgresql) {
-          const { createDatabase } = await import("../infra/postgres.js");
-          await createDatabase(
-            installResult.postgresql.database,
-            installResult.postgresql.user,
-            runtime,
-          );
+          // TODO: Re-enable when infra/postgres.js is implemented
+          // const { createDatabase } = await import("../infra/postgres.js");
+          // await createDatabase(
+          //   installResult.postgresql.database,
+          //   installResult.postgresql.user,
+          //   runtime,
+          // );
+          runtime.log("Database creation skipped - infra/postgres.js not implemented");
         }
       } catch (err) {
         runtime.error(`Auto-install failed: ${err}`);
@@ -503,7 +521,7 @@ export async function promptMemoryDeployment(
       });
       const database = await prompter.text({
         message: "Database name",
-        initialValue: "openclaw_memory",
+        initialValue: "long_term_db",
       });
       const user = await prompter.text({
         message: "Database user",
@@ -525,7 +543,7 @@ export async function promptMemoryDeployment(
       config.postgresql = {
         host: "localhost",
         port: 5432,
-        database: "openclaw_memory",
+        database: "long_term_db",
         user: "postgres",
         password: "",
         installPath: "/media/tars/TARS_MEMORY/postgresql-installed",

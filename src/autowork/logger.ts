@@ -14,16 +14,28 @@ import { createSubsystemLogger } from "../logging/subsystem.js";
 const log = createSubsystemLogger("autowork");
 
 export type TaskStatus = 
+  | "INIT"
   | "QUEUED"
   | "STARTED"
+  | "SCANNING"
   | "FOUND"
   | "SELECTED"
+  | "BRANCH"
   | "BRANCHED"
   | "EXECUTING"
+  | "PROGRESS"
+  | "COMMIT"
   | "COMMITTED"
+  | "PUSHED"
+  | "BLOCKED"
+  | "UPDATE"
   | "COMPLETED"
   | "FAILED"
-  | "SKIPPED";
+  | "SKIPPED"
+  | "IDLE"
+  | "NO_TASKS"
+  | "ERROR"
+  | "CREATE";
 
 export type MemoryMode = "minimal" | "full";
 
@@ -57,7 +69,7 @@ function getLogDir(): string {
  */
 export function initAutoworkLogger(mode: MemoryMode): void {
   memoryMode = mode;
-  log.info({ mode }, "Autowork logger initialized");
+  log.info("Autowork logger initialized", { mode });
 }
 
 /**
@@ -77,7 +89,7 @@ async function getLogFile(): Promise<string> {
   logFilePath = path.join(logDir, `${today}.log`);
   currentDate = today;
   
-  log.debug({ logFilePath }, "Log file ready");
+  log.debug("Log file ready", { logFilePath });
   return logFilePath;
 }
 
@@ -109,7 +121,7 @@ async function writeToFile(entry: LogEntry): Promise<void> {
     await fs.appendFile(filePath, line, "utf-8");
   } catch (err) {
     // Don't fail the task if logging fails
-    log.error({ error: String(err) }, "Failed to write to audit log");
+    log.error("Failed to write to audit log", { error: String(err) });
   }
 }
 
@@ -132,24 +144,24 @@ export function taskLog(
     case "FOUND":
     case "SELECTED":
     case "BRANCHED":
-      log.info(logData, message);
+      log.info(message, logData);
       break;
     case "EXECUTING":
-      log.debug(logData, message);
+      log.debug(message, logData);
       break;
     case "COMMITTED":
     case "COMPLETED":
-      log.info(logData, message);
+      log.info(message, logData);
       break;
     case "FAILED":
-      log.error(logData, message);
+      log.error(message, logData);
       break;
     case "SKIPPED":
     case "QUEUED":
-      log.debug(logData, message);
+      log.debug(message, logData);
       break;
     default:
-      log.info(logData, message);
+      log.info(message, logData);
   }
 
   // Write to daily audit log file (async, don't await)

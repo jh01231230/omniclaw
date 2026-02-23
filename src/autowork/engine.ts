@@ -10,9 +10,17 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { sessions_spawn, sessions_history, sessions_list } from "./api.js";
 import { initAutoworkLogger, taskLog, listAuditLogDates, getAuditLog, type TaskStatus } from "./logger.js";
 import { createBranch, commitChanges, getGitStatus, isGitRepo } from "./git.js";
+import { 
+  initAutoworkDb, 
+  queryPendingTasks, 
+  updateTaskStatus as dbUpdateTaskStatus,
+  createTask,
+  getTaskById,
+  pingDb,
+  type DbMemory 
+} from "./db.js";
 
 // ===== Types =====
 
