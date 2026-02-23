@@ -30,6 +30,13 @@ export type SubscribeEmbeddedPiSessionParams = {
   onAssistantMessageStart?: () => void | Promise<void>;
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void | Promise<void>;
   enforceFinalTag?: boolean;
+  /** Called after each tool execution completes. */
+  onAfterToolExecution?: (params: {
+    toolName: string;
+    toolCallId: string;
+    isError: boolean;
+    steer: (text: string) => Promise<void>;
+  }) => Promise<void>;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";

@@ -8,6 +8,25 @@ export type ChatAbortControllerEntry = {
   expiresAtMs: number;
 };
 
+// Simple in-memory queue for interleaved messages (disabled by default)
+const pendingInterleavedMessages = new Map<string, string[]>();
+
+export function enqueueInterleavedMessage(sessionKey: string, message: string): void {
+  const messages = pendingInterleavedMessages.get(sessionKey) || [];
+  messages.push(message);
+  pendingInterleavedMessages.set(sessionKey, messages);
+}
+
+export function dequeueInterleavedMessages(sessionKey: string): string[] {
+  const messages = pendingInterleavedMessages.get(sessionKey) || [];
+  pendingInterleavedMessages.delete(sessionKey);
+  return messages;
+}
+
+export function hasInterleavedMessages(sessionKey: string): boolean {
+  return (pendingInterleavedMessages.get(sessionKey)?.length ?? 0) > 0;
+}
+
 export function isChatStopCommandText(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) {

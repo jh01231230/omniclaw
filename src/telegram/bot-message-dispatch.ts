@@ -74,6 +74,16 @@ export const dispatchTelegramMessage = async ({
     removeAckAfterReply,
   } = context;
 
+  // Check for stop command
+  const messageText = ctxPayload.Body?.toString().trim().toLowerCase() || "";
+  const isStopCommand = messageText === "/stop" || messageText === "停止" || messageText === "stop";
+  
+  if (isStopCommand) {
+    fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " STOP command detected\n");
+    // Acknowledge the stop command - the actual abort will be handled by the system
+    return;
+  }
+
   const isPrivateChat = msg.chat.type === "private";
   const draftThreadId = threadSpec.id;
   const draftMaxChars = Math.min(textLimit, 4096);
@@ -335,7 +345,8 @@ export const dispatchTelegramMessage = async ({
     clearHistoryEntriesIfEnabled({ historyMap: groupHistories, historyKey, limit: historyLimit });
   }
 
-  // Trigger agent event for session-capture
+  // Trigger agent event for session-capture (disabled for debugging)
+  /*
   console.log("[session-capture] Triggering agent event for session:", route.sessionKey);
   try {
     const agentResponse = "";
@@ -355,4 +366,5 @@ export const dispatchTelegramMessage = async ({
   } catch (err) {
     logVerbose(`[session-capture] Failed to trigger agent hook: ${err}`);
   }
+  */
 };

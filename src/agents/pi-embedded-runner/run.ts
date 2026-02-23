@@ -361,6 +361,7 @@ export async function runEmbeddedPiAgent(
             onReasoningStream: params.onReasoningStream,
             onToolResult: params.onToolResult,
             onAgentEvent: params.onAgentEvent,
+            onAfterToolExecution: params.onAfterToolExecution,
             extraSystemPrompt: params.extraSystemPrompt,
             streamParams: params.streamParams,
             ownerNumbers: params.ownerNumbers,

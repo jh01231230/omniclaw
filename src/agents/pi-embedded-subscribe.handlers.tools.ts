@@ -145,7 +145,7 @@ export function handleToolExecutionUpdate(
   });
 }
 
-export function handleToolExecutionEnd(
+export async function handleToolExecutionEnd(
   ctx: EmbeddedPiSubscribeContext,
   evt: AgentEvent & {
     toolName: string;
@@ -225,5 +225,18 @@ export function handleToolExecutionEnd(
     if (outputText) {
       ctx.emitToolOutput(toolName, meta, outputText);
     }
+  }
+
+  // Call onAfterToolExecution callback if provided (for interleaved mode)
+  if (ctx.params.onAfterToolExecution) {
+    const steer = async (text: string) => {
+      await ctx.params.session.steer(text);
+    };
+    await ctx.params.onAfterToolExecution({
+      toolName,
+      toolCallId,
+      isError: isToolError,
+      steer,
+    });
   }
 }

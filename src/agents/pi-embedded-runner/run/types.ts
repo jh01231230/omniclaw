@@ -78,6 +78,13 @@ export type EmbeddedRunAttemptParams = {
   onReasoningStream?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
   onToolResult?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void;
+  /** Called after each tool execution. */
+  onAfterToolExecution?: (params: {
+    toolName: string;
+    toolCallId: string;
+    isError: boolean;
+    steer: (text: string) => Promise<void>;
+  }) => Promise<void>;
   extraSystemPrompt?: string;
   streamParams?: AgentStreamParams;
   ownerNumbers?: string[];
