@@ -79,9 +79,9 @@ export const dispatchTelegramMessage = async ({
   const isStopCommand = messageText === "/stop" || messageText === "停止" || messageText === "stop";
   
   if (isStopCommand) {
-    fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " STOP command detected\n");
-    // Acknowledge the stop command - the actual abort will be handled by the system
-    return;
+    fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " STOP command - letting system handle it\n");
+    // Let the message flow through normally - the system will detect the stop command
+    // and abort any running sessions
   }
 
   const isPrivateChat = msg.chat.type === "private";
