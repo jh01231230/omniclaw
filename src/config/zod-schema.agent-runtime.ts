@@ -319,6 +319,16 @@ export const MemorySearchSchema = z
       })
       .strict()
       .optional(),
+    // Redis configuration for session capture
+    redis: z
+      .object({
+        host: z.string().optional(),
+        port: z.number().int().positive().optional(),
+        db: z.number().int().min(0).max(15).optional(),
+        sessionPrefix: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     sources: z.array(z.union([z.literal("memory"), z.literal("sessions")])).optional(),
     extraPaths: z.array(z.string()).optional(),
     experimental: z

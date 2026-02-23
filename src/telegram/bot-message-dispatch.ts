@@ -17,10 +17,13 @@ import { createTypingCallbacks } from "../channels/typing.js";
 import { OmniClawConfig } from "../config/config.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
 import { danger, logVerbose } from "../globals.js";
+import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
 import { deliverReplies } from "./bot/delivery.js";
 import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
+
+import * as fs from "fs";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
@@ -51,6 +54,7 @@ export const dispatchTelegramMessage = async ({
   resolveBotTopicsEnabled,
   // oxlint-disable-next-line typescript/no-explicit-any
 }: any) => {
+  fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " dispatchTelegramMessage called\n");
   const {
     ctxPayload,
     primaryCtx,
@@ -329,5 +333,26 @@ export const dispatchTelegramMessage = async ({
   });
   if (isGroup && historyKey) {
     clearHistoryEntriesIfEnabled({ historyMap: groupHistories, historyKey, limit: historyLimit });
+  }
+
+  // Trigger agent event for session-capture
+  console.log("[session-capture] Triggering agent event for session:", route.sessionKey);
+  try {
+    const agentResponse = "";
+    const agentEvent = createInternalHookEvent(
+      "agent",
+      "complete",
+      route.sessionKey,
+      {
+        cfg,
+        channel: "telegram",
+        response: agentResponse,
+        success: hasFinalResponse,
+      },
+    );
+    void triggerInternalHook(agentEvent);
+    fs.appendFileSync("/tmp/bot-message-trigger.log", `${new Date().toISOString()} triggered agent event\n`);
+  } catch (err) {
+    logVerbose(`[session-capture] Failed to trigger agent hook: ${err}`);
   }
 };

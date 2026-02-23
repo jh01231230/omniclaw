@@ -7,7 +7,7 @@ metadata:
     "omniclaw":
       {
         "emoji": "📡",
-        "events": ["message"],
+        "events": ["agent"],
         "requires": { "config": ["memorySearch.redis"] },
         "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }],
       },

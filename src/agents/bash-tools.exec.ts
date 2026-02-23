@@ -958,10 +958,7 @@ export function createExecTool(
           : effectiveDefaultMode;
       const elevatedRequested = elevatedMode !== "off";
       const sudoMode = defaults?.sudo?.mode ?? "never";
-      // When sudo mode is always/consent, treat as elevated requested to trigger whitelist check
-      const effectiveElevatedRequested =
-        elevatedRequested || sudoMode === "always" || sudoMode === "consent";
-      if (effectiveElevatedRequested) {
+      if (elevatedRequested) {
         if (!elevatedDefaults?.enabled || !elevatedDefaults.allowed) {
           const runtime = defaults?.sandbox ? "sandboxed" : "direct";
           const gates: string[] = [];
@@ -997,26 +994,26 @@ export function createExecTool(
           );
         }
       }
-      if (effectiveElevatedRequested) {
+      if (elevatedRequested) {
         logInfo(`exec: elevated command ${truncateMiddle(params.command, 120)}`);
       }
       const configuredHost = defaults?.host ?? "sandbox";
       const requestedHost = normalizeExecHost(params.host) ?? null;
       let host: ExecHost = requestedHost ?? configuredHost;
-      if (!effectiveElevatedRequested && requestedHost && requestedHost !== configuredHost) {
+      if (!elevatedRequested && requestedHost && requestedHost !== configuredHost) {
         throw new Error(
           `exec host not allowed (requested ${renderExecHostLabel(requestedHost)}; ` +
             `configure tools.exec.host=${renderExecHostLabel(configuredHost)} to allow).`,
         );
       }
-      if (effectiveElevatedRequested) {
+      if (elevatedRequested) {
         host = "gateway";
       }
 
       const configuredSecurity = defaults?.security ?? (host === "sandbox" ? "deny" : "allowlist");
       const requestedSecurity = normalizeExecSecurity(params.security);
       let security = minSecurity(configuredSecurity, requestedSecurity ?? configuredSecurity);
-      if (effectiveElevatedRequested && elevatedMode === "full") {
+      if (elevatedRequested && elevatedMode === "full") {
         security = "full";
       }
       const configuredAsk = defaults?.ask ?? "on-miss";
@@ -1024,12 +1021,10 @@ export function createExecTool(
       let ask = maxAsk(configuredAsk, requestedAsk ?? configuredAsk);
       const sudoAuth = defaults?.sudo?.auth === "nopasswd" ? "nopasswd" : "password";
       const sudoAllowlist = normalizeSudoAllowlist(defaults?.sudo?.allow);
-      // Use sudo when elevated is requested (including always/consent sudo modes)
-      const shouldUseSudo =
-        host === "gateway" && effectiveElevatedRequested && sudoMode !== "never";
+      // Use sudo when elevated is requested OR when sudo mode is always/consent
+      const shouldUseSudo = host === "gateway" && (elevatedRequested || sudoMode === "always" || sudoMode === "consent") && sudoMode !== "never";
       const sudoConsentRequired = shouldUseSudo && sudoMode === "consent";
-      const bypassApprovals =
-        effectiveElevatedRequested && elevatedMode === "full" && !sudoConsentRequired;
+      const bypassApprovals = elevatedRequested && elevatedMode === "full" && !sudoConsentRequired;
       if (bypassApprovals) {
         ask = "off";
       }

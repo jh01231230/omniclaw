@@ -8,7 +8,7 @@
 import type { WorkspaceBootstrapFile } from "../agents/workspace.js";
 import type { OmniClawConfig } from "../config/config.js";
 
-export type InternalHookEventType = "command" | "session" | "agent" | "gateway";
+export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message";
 
 export type AgentBootstrapHookContext = {
   workspaceDir: string;
@@ -69,6 +69,7 @@ export function registerInternalHook(eventKey: string, handler: InternalHookHand
     handlers.set(eventKey, []);
   }
   handlers.get(eventKey)!.push(handler);
+  console.log(`[internal-hooks] Registered handler for: ${eventKey} (total: ${handlers.get(eventKey)!.length})`);
 }
 
 /**
@@ -127,8 +128,11 @@ export async function triggerInternalHook(event: InternalHookEvent): Promise<voi
   const allHandlers = [...typeHandlers, ...specificHandlers];
 
   if (allHandlers.length === 0) {
+    console.log(`[internal-hooks] No handlers for event type: ${event.type}:${event.action}`);
     return;
   }
+
+  console.log(`[internal-hooks] Triggering ${allHandlers.length} handler(s) for ${event.type}:${event.action}`);
 
   for (const handler of allHandlers) {
     try {

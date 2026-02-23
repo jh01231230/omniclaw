@@ -108,6 +108,16 @@ export type InternalHooksConfig = {
   };
   /** Install records for hook packs or hooks */
   installs?: Record<string, HookInstallRecord>;
+  /** Session capture hook configuration */
+  sessionCapture?: {
+    enabled?: boolean;
+    redis?: {
+      host?: string;
+      port?: number;
+      db?: number;
+      sessionPrefix?: string;
+    };
+  };
 };
 
 export type HooksConfig = {

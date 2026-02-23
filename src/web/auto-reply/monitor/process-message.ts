@@ -416,5 +416,32 @@ export async function processMessage(params: {
     params.groupHistories.set(params.groupHistoryKey, []);
   }
 
+  // Note: outbound message hook disabled - queuedFinal is now a boolean and doesn't contain message content
+  // The deliver callback handles the actual message delivery
+  /*
+  // Trigger message event for outbound (assistant) messages
+  try {
+    const assistantMessage = queuedFinal?.text || queuedFinal?.content?.[0]?.text || "";
+    if (assistantMessage) {
+      const outboundEvent = createInternalHookEvent(
+        "message",
+        "outbound",
+        params.route.sessionKey,
+        {
+          cfg: params.cfg,
+          channel: ctxPayload.Provider?.toLowerCase() || "unknown",
+          message: {
+            role: "assistant",
+            content: assistantMessage,
+          },
+        },
+      );
+      void triggerInternalHook(outboundEvent);
+    }
+  } catch (err) {
+    params.replyLogger.warn({ error: formatError(err) }, "failed triggering outbound message hook");
+  }
+  */
+
   return didSendReply;
 }
