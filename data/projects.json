@@ -10,11 +10,7 @@
         "status": "completed",
         "start_date": null,
         "end_date": "2026-02-11T20:02:39.683421",
-        "tasks": [
-          "收集需求",
-          "写文档",
-          "确认功能"
-        ],
+        "tasks": ["收集需求", "写文档", "确认功能"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -23,11 +19,7 @@
         "status": "completed",
         "start_date": "2026-02-11T20:02:39.683466",
         "end_date": "2026-02-11T20:02:39.690807",
-        "tasks": [
-          "画原型图",
-          "UI设计",
-          "用户确认"
-        ],
+        "tasks": ["画原型图", "UI设计", "用户确认"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -36,11 +28,7 @@
         "status": "completed",
         "start_date": "2026-02-11T20:02:39.690826",
         "end_date": "2026-02-11T20:02:39.692346",
-        "tasks": [
-          "数据库设计",
-          "API开发",
-          "业务逻辑"
-        ],
+        "tasks": ["数据库设计", "API开发", "业务逻辑"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -49,11 +37,7 @@
         "status": "completed",
         "start_date": "2026-02-11T20:02:39.692362",
         "end_date": "2026-02-11T20:02:39.693818",
-        "tasks": [
-          "页面开发",
-          "交互实现",
-          "API对接"
-        ],
+        "tasks": ["页面开发", "交互实现", "API对接"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -62,10 +46,7 @@
         "status": "completed",
         "start_date": "2026-02-11T20:02:39.693834",
         "end_date": "2026-02-11T20:02:39.695491",
-        "tasks": [
-          "功能测试",
-          "Bug修复"
-        ],
+        "tasks": ["功能测试", "Bug修复"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -74,11 +55,7 @@
         "status": "completed",
         "start_date": "2026-02-11T20:02:39.695506",
         "end_date": "2026-02-11T20:02:39.696958",
-        "tasks": [
-          "服务器部署",
-          "域名配置",
-          "上线发布"
-        ],
+        "tasks": ["服务器部署", "域名配置", "上线发布"],
         "completed_tasks": [],
         "notes": ""
       }
@@ -144,11 +121,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "收集需求",
-          "写文档",
-          "确认功能"
-        ],
+        "tasks": ["收集需求", "写文档", "确认功能"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -157,11 +130,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "画原型图",
-          "UI设计",
-          "用户确认"
-        ],
+        "tasks": ["画原型图", "UI设计", "用户确认"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -170,11 +139,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "数据库设计",
-          "API开发",
-          "业务逻辑"
-        ],
+        "tasks": ["数据库设计", "API开发", "业务逻辑"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -183,11 +148,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "页面开发",
-          "交互实现",
-          "API对接"
-        ],
+        "tasks": ["页面开发", "交互实现", "API对接"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -196,10 +157,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "功能测试",
-          "Bug修复"
-        ],
+        "tasks": ["功能测试", "Bug修复"],
         "completed_tasks": [],
         "notes": ""
       },
@@ -208,11 +166,7 @@
         "status": "pending",
         "start_date": null,
         "end_date": null,
-        "tasks": [
-          "服务器部署",
-          "域名配置",
-          "上线发布"
-        ],
+        "tasks": ["服务器部署", "域名配置", "上线发布"],
         "completed_tasks": [],
         "notes": ""
       }

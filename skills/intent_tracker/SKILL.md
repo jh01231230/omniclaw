@@ -42,7 +42,7 @@ python project_tracker.py create -t "做个XX"
 python project_tracker.py list
 python project_tracker.py followup
 
-# Habits  
+# Habits
 python habit_tracker.py create -t "我想健身"
 python habit_tracker.py list
 python habit_tracker.py dashboard

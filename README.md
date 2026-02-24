@@ -57,6 +57,7 @@ OMNICLAW_FORCE_BUILD=1 pnpm omniclaw completion --install --shell bash --yes
 ```
 
 **Dev loop** (auto-reload on changes):
+
 ```bash
 pnpm gateway:watch
 ```
@@ -88,14 +89,15 @@ Minimal config `~/.omniclaw/omniclaw.json`:
 }
 ```
 
-| Path | Purpose |
-|------|---------|
-| `~/.omniclaw/omniclaw.json` | Main config (JSON5) |
-| `~/.omniclaw/workspace` | Agent workspace, skills, prompts |
-| `~/.omniclaw/credentials` | OAuth tokens, channel creds |
-| `~/.omniclaw/sessions` | Session transcripts, memory |
+| Path                        | Purpose                          |
+| --------------------------- | -------------------------------- |
+| `~/.omniclaw/omniclaw.json` | Main config (JSON5)              |
+| `~/.omniclaw/workspace`     | Agent workspace, skills, prompts |
+| `~/.omniclaw/credentials`   | OAuth tokens, channel creds      |
+| `~/.omniclaw/sessions`      | Session transcripts, memory      |
 
 **Environment variables:**
+
 - `OMNICLAW_STATE_DIR` — Override state root (default: `~/.omniclaw`)
 - `OMNICLAW_CONFIG_PATH` — Override config file path
 - `OMNICLAW_GATEWAY_PORT` — Override gateway port (default: 18789)
@@ -130,14 +132,14 @@ pnpm omniclaw tui
 
 ## Highlights
 
-| Feature | Description |
-|---------|-------------|
-| **Local-first Gateway** | Single control plane for sessions, channels, tools, and events |
+| Feature                 | Description                                                             |
+| ----------------------- | ----------------------------------------------------------------------- |
+| **Local-first Gateway** | Single control plane for sessions, channels, tools, and events          |
 | **Multi-channel inbox** | WhatsApp, Telegram, Slack, Discord, Signal, iMessage, WebChat, and more |
-| **Guided onboarding** | Step-by-step wizard with clear options and hints |
-| **Pi agent runtime** | RPC mode with tool streaming and block streaming |
-| **Skills platform** | Bundled, managed, and workspace skills |
-| **Security defaults** | Loopback bind, pairing/allowlists, log redaction |
+| **Guided onboarding**   | Step-by-step wizard with clear options and hints                        |
+| **Pi agent runtime**    | RPC mode with tool streaming and block streaming                        |
+| **Skills platform**     | Bundled, managed, and workspace skills                                  |
+| **Security defaults**   | Loopback bind, pairing/allowlists, log redaction                        |
 
 ---
 
@@ -149,6 +151,7 @@ pnpm omniclaw tui
 - **Skills sandbox:** Local-only install; restricted filesystem and network.
 
 Run regularly:
+
 ```bash
 pnpm omniclaw security audit
 pnpm omniclaw security audit --deep

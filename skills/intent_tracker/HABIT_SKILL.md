@@ -42,11 +42,11 @@ python habit_tracker.py dashboard
 
 ## Supported Habit Types
 
-| Category | Keywords | Examples |
-|----------|----------|----------|
-| Fitness | 健身, 运动, 跑步, 瑜伽 | 每日运动30分钟 |
-| Health | 减肥, 早睡, 多喝水 | 每日8000步 |
-| Learning | 学习, 背单词, 读书 | 背单词20个 |
+| Category | Keywords               | Examples       |
+| -------- | ---------------------- | -------------- |
+| Fitness  | 健身, 运动, 跑步, 瑜伽 | 每日运动30分钟 |
+| Health   | 减肥, 早睡, 多喝水     | 每日8000步     |
+| Learning | 学习, 背单词, 读书     | 背单词20个     |
 
 ## How It Works
 
@@ -73,6 +73,7 @@ python habit_tracker.py dashboard
 ## Data Storage
 
 Habits stored in: `/home/tars/Workspace/safeclaw/data/`
+
 - `habits.json` - Habit definitions
 - `habit_logs.json` - Daily logs
 
@@ -82,6 +83,7 @@ Add to `HEARTBEAT.md`:
 
 ```markdown
 # Habit Follow-up
+
 Check pending: `python habit_tracker.py list`
 Generate nudge: `assistant.process_message("今天天气不错")`
 ```

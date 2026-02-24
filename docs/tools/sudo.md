@@ -12,11 +12,11 @@ OmniClaw can store your sudo/root password so that commands needing elevation ca
 
 ## Modes
 
-| Mode | Behavior |
-|------|----------|
-| `never` | Do not store or use sudo password. Commands needing elevation will fail. |
-| `consent` | Store password; use only after you explicitly approve each sudo use in chat. |
-| `always` | Store password; use automatically when commands need sudo. No per-use prompt. |
+| Mode      | Behavior                                                                      |
+| --------- | ----------------------------------------------------------------------------- |
+| `never`   | Do not store or use sudo password. Commands needing elevation will fail.      |
+| `consent` | Store password; use only after you explicitly approve each sudo use in chat.  |
+| `always`  | Store password; use automatically when commands need sudo. No per-use prompt. |
 
 ## Configuration
 
@@ -26,7 +26,7 @@ Set during onboarding (`omniclaw onboard`) or in config:
 {
   tools: {
     sudo: {
-      mode: "never",  // or "consent" | "always"
+      mode: "never", // or "consent" | "always"
     },
   },
 }
