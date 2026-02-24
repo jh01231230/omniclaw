@@ -16,6 +16,7 @@ import {
 } from "../hooks/internal-hooks.js";
 import { loadInternalHooks } from "../hooks/loader.js";
 import { isTruthyEnvValue } from "../infra/env.js";
+import { initRedisTranscriptSync } from "../memory/redis-transcript-sync.js";
 import { type PluginServicesHandle, startPluginServices } from "../plugins/services.js";
 import { startBrowserControlServerIfEnabled } from "./server-browser.js";
 import {
@@ -112,6 +113,13 @@ export async function startGatewaySidecars(params: {
   } catch (err) {
     console.log("[startup] Hook loading error:", err);
     params.logHooks.error(`failed to load hooks: ${String(err)}`);
+  }
+
+  // Initialize Redis transcript sync (mirrors session files to Redis in real-time)
+  try {
+    initRedisTranscriptSync(params.cfg);
+  } catch (err) {
+    params.logHooks.warn(`redis transcript sync init: ${String(err)}`);
   }
 
   // Launch configured channels so gateway replies via the surface the message came from.

@@ -15,6 +15,7 @@ import {
   type ResponsePrefixContext,
 } from "../../auto-reply/reply/response-prefix-template.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
+import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import {
   abortChatRunById,
@@ -139,6 +140,7 @@ function appendAssistantTranscriptMessage(params: {
 
   try {
     fs.appendFileSync(transcriptPath, `${JSON.stringify(transcriptEntry)}\n`, "utf-8");
+    emitSessionTranscriptUpdate(transcriptPath);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -438,7 +440,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         startedAtMs: now,
         expiresAtMs: resolveChatRunExpiresAtMs({ now, timeoutMs }),
       });
-      
+
       // Mark session as active for interleaved mode
       markSessionActive(p.sessionKey);
 
@@ -677,6 +679,7 @@ export const chatHandlers: GatewayRequestHandlers = {
     // Append to transcript file
     try {
       fs.appendFileSync(transcriptPath, `${JSON.stringify(transcriptEntry)}\n`, "utf-8");
+      emitSessionTranscriptUpdate(transcriptPath);
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       respond(
