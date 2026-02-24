@@ -22,6 +22,7 @@ export type OmniClawHookMetadata = {
     anyBins?: string[];
     env?: string[];
     config?: string[];
+    notConfig?: string[];
   };
   install?: HookInstallSpec[];
 };

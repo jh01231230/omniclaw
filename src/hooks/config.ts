@@ -160,5 +160,17 @@ export function shouldIncludeHook(params: {
     }
   }
 
+  // Check prohibited config paths (must NOT match)
+  const prohibitedConfig = entry.metadata?.requires?.notConfig ?? [];
+  if (prohibitedConfig.length > 0) {
+    for (const configSpec of prohibitedConfig) {
+      const [configPath, prohibitedValue] = configSpec.split("=");
+      const actualValue = resolveConfigPath(config, configPath);
+      if (actualValue === prohibitedValue) {
+        return false;
+      }
+    }
+  }
+
   return true;
 }

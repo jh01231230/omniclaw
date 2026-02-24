@@ -36,15 +36,26 @@ const normalizeNonNegativeInt = (value: unknown): number | null => {
 };
 
 export function resolveMemoryFlushSettings(cfg?: OmniClawConfig): MemoryFlushSettings | null {
-  const defaults = cfg?.agents?.defaults?.compaction?.memoryFlush;
-  const enabled = defaults?.enabled ?? true;
+  // In full deployment mode, memoryFlush is disabled (use memory-enrichment hook instead)
+  const cfgAny = cfg as unknown as Record<string, unknown>;
+  const agents = cfgAny?.agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  const memorySearch = defaults?.memorySearch as Record<string, unknown> | undefined;
+  const deployment = memorySearch?.deployment as string | undefined;
+  
+  if (deployment === "full") {
+    return null;
+  }
+
+  const memoryFlushDefaults = cfg?.agents?.defaults?.compaction?.memoryFlush;
+  const enabled = memoryFlushDefaults?.enabled ?? true;
   if (!enabled) {
     return null;
   }
   const softThresholdTokens =
-    normalizeNonNegativeInt(defaults?.softThresholdTokens) ?? DEFAULT_MEMORY_FLUSH_SOFT_TOKENS;
-  const prompt = defaults?.prompt?.trim() || DEFAULT_MEMORY_FLUSH_PROMPT;
-  const systemPrompt = defaults?.systemPrompt?.trim() || DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT;
+    normalizeNonNegativeInt(memoryFlushDefaults?.softThresholdTokens) ?? DEFAULT_MEMORY_FLUSH_SOFT_TOKENS;
+  const prompt = memoryFlushDefaults?.prompt?.trim() || DEFAULT_MEMORY_FLUSH_PROMPT;
+  const systemPrompt = memoryFlushDefaults?.systemPrompt?.trim() || DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT;
   const reserveTokensFloor =
     normalizeNonNegativeInt(cfg?.agents?.defaults?.compaction?.reserveTokensFloor) ??
     DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR;
