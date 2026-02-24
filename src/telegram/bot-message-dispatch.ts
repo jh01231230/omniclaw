@@ -361,8 +361,7 @@ export const dispatchTelegramMessage = async ({
     clearHistoryEntriesIfEnabled({ historyMap: groupHistories, historyKey, limit: historyLimit });
   }
 
-  // Trigger agent event for session-capture (disabled for debugging)
-  /*
+  // Trigger agent event for session-capture
   console.log("[session-capture] Triggering agent event for session:", route.sessionKey);
   try {
     const agentResponse = "";
@@ -382,5 +381,4 @@ export const dispatchTelegramMessage = async ({
   } catch (err) {
     logVerbose(`[session-capture] Failed to trigger agent hook: ${err}`);
   }
-  */
 };
