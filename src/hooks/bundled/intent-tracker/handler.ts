@@ -3,16 +3,23 @@
  * Automatically detects user intents and generates follow-ups
  */
 
-import type { HookHandler } from "../../hooks.js";
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import type { HookHandler } from "../../hooks.js";
 
 const execAsync = promisify(exec);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT_PATH = path.join(__dirname, "..", "..", "skills", "intent_tracker", "safeclaw_integration.py");
+const SCRIPT_PATH = path.join(
+  __dirname,
+  "..",
+  "..",
+  "skills",
+  "intent_tracker",
+  "safeclaw_integration.py",
+);
 
 /**
  * Casual message patterns that trigger follow-up
@@ -32,16 +39,16 @@ const CASUAL_PATTERNS = [
 
 function isCasualMessage(text: string): boolean {
   const trimmed = text.trim().toLowerCase();
-  return CASUAL_PATTERNS.some(pattern => pattern.test(trimmed));
+  return CASUAL_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
 
 async function detectIntent(text: string): Promise<string | null> {
   try {
     const { stdout } = await execAsync(
       `python3 "${SCRIPT_PATH}" process -t "${text.replace(/"/g, '\\"')}"`,
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
-    
+
     return stdout.trim() || null;
   } catch {
     return null;
@@ -67,7 +74,7 @@ const intentTrackerHandler: HookHandler = async (event) => {
   // Check if casual message that might need follow-up
   if (isCasualMessage(message)) {
     const followUp = await detectIntent(message);
-    
+
     if (followUp) {
       // Add follow-up message to be sent
       event.messages.push(followUp);

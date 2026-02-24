@@ -50,11 +50,13 @@ AI: "对了，项目管理工具进展怎么样啦？现在是规划阶段。"
 ## Commands
 
 View tracking status:
+
 ```bash
 python3 skills/intent_tracker/safeclaw_integration.py status
 ```
 
 Manual intent detection:
+
 ```bash
 python3 skills/intent_tracker/safeclaw_integration.py process -t "你的消息"
 ```

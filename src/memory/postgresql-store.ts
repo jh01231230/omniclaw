@@ -3,8 +3,8 @@
  * Uses pgvector for semantic search
  */
 
-import { randomUUID } from "crypto";
 import { execSync } from "child_process";
+import { randomUUID } from "crypto";
 
 export interface MemoryEntry {
   id: string;
@@ -33,13 +33,14 @@ export class PostgreSQLMemoryStore {
 
   constructor(config: PostgreSQLMemoryStoreConfig) {
     this.config = config;
-    this.psqlPath = process.env.PSQL_PATH || "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
+    this.psqlPath =
+      process.env.PSQL_PATH || "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
   }
 
   private runSql(sql: string): string {
     return execSync(
       `${this.psqlPath} -U ${this.config.user} -d ${this.config.database} -h ${this.config.host} -p ${this.config.port} -t -A -c "${sql.replace(/"/g, '\\"')}"`,
-      { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 }
+      { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 },
     );
   }
 
@@ -50,14 +51,14 @@ export class PostgreSQLMemoryStore {
 
   async addMemory(entry: Omit<MemoryEntry, "id" | "createdAt" | "updatedAt">): Promise<string> {
     const id = randomUUID();
-    const embeddingStr = entry.embedding 
-      ? `'[${entry.embedding.join(",")}]'::vector`
-      : 'NULL';
+    const embeddingStr = entry.embedding ? `'[${entry.embedding.join(",")}]'::vector` : "NULL";
     const metadataStr = JSON.stringify(entry.metadata || {}).replace(/'/g, "''");
-    const tagsStr = entry.tags ? `ARRAY[${entry.tags.map(t => `'${t}'`).join(",")}]` : 'ARRAY[]::text[]';
+    const tagsStr = entry.tags
+      ? `ARRAY[${entry.tags.map((t) => `'${t}'`).join(",")}]`
+      : "ARRAY[]::text[]";
 
     const sql = `INSERT INTO memories (id, content, embedding, metadata, source, importance, tags)
-                 VALUES ('${id}', E'${entry.content.replace(/'/g, "''")}', ${embeddingStr}, '${metadataStr}'::jsonb, '${entry.source || 'conversation'}', ${entry.importance || 0}, ${tagsStr})`;
+                 VALUES ('${id}', E'${entry.content.replace(/'/g, "''")}', ${embeddingStr}, '${metadataStr}'::jsonb, '${entry.source || "conversation"}', ${entry.importance || 0}, ${tagsStr})`;
 
     this.runSql(sql);
     return id;
@@ -91,16 +92,16 @@ export class PostgreSQLMemoryStore {
       LIMIT 50`;
 
       const result = this.runSql(sql);
-      
+
       if (!result.trim()) return [];
 
       // Parse each line as JSON
       const lines = result.trim().split("\n");
       const memories: Array<MemoryEntry & { embStr: string }> = [];
-      
+
       for (const line of lines) {
         if (!line.trim()) continue;
-        
+
         try {
           const parsed = JSON.parse(line);
           memories.push({
@@ -121,7 +122,7 @@ export class PostgreSQLMemoryStore {
 
       // Calculate similarity in JavaScript
       return memories
-        .map(m => {
+        .map((m) => {
           let emb: number[] = [];
           try {
             // Parse embedding string like "[0.1,0.2,...]"
@@ -130,7 +131,7 @@ export class PostgreSQLMemoryStore {
               emb = embMatch[1].split(",").map(Number);
             }
           } catch (e) {}
-          
+
           return {
             id: m.id,
             content: m.content,
@@ -144,16 +145,17 @@ export class PostgreSQLMemoryStore {
         })
         .sort((a, b) => b._similarity - a._similarity)
         .slice(0, limit)
-        .map((m): MemoryEntry => ({
-          id: m.id,
-          content: m.content,
-          metadata: m.metadata,
-          source: m.source,
-          importance: m.importance,
-          tags: m.tags,
-          createdAt: m.createdAt,
-        }));
-        
+        .map(
+          (m): MemoryEntry => ({
+            id: m.id,
+            content: m.content,
+            metadata: m.metadata,
+            source: m.source,
+            importance: m.importance,
+            tags: m.tags,
+            createdAt: m.createdAt,
+          }),
+        );
     } catch (err) {
       console.error("Search error:", err);
       return [];
@@ -181,8 +183,8 @@ export class PostgreSQLMemoryStore {
 
       const lines = result.trim().split("\n");
       return lines
-        .filter(l => l.trim())
-        .map(line => {
+        .filter((l) => l.trim())
+        .map((line) => {
           try {
             const parsed = JSON.parse(line);
             return {

@@ -1,12 +1,12 @@
 /**
  * Session Archive - Move sessions from Redis to PostgreSQL
- * 
+ *
  * Periodically archives session data from Redis (short-term)
  * to PostgreSQL (long-term memory)
  */
 
-import { RedisSessionStore, type SessionMessage } from "./redis-session-store.js";
 import { randomUUID } from "node:crypto";
+import { RedisSessionStore, type SessionMessage } from "./redis-session-store.js";
 
 export interface ArchiveConfig {
   redisConfig?: {
@@ -22,8 +22,8 @@ export interface ArchiveConfig {
     user: string;
     password?: string;
   };
-  archiveAfterDays?: number;  // Archive sessions older than this
-  batchSize?: number;          // Number of sessions to process per run
+  archiveAfterDays?: number; // Archive sessions older than this
+  batchSize?: number; // Number of sessions to process per run
 }
 
 const DEFAULT_CONFIG = {
@@ -69,7 +69,7 @@ export class SessionArchiver {
     sessions: string[];
   }> {
     console.log("[session-archiver] Starting archive process...");
-    
+
     const archived: string[] = [];
     let failed = 0;
 
@@ -89,17 +89,17 @@ export class SessionArchiver {
 
         try {
           const info = await this.redisStore.getSessionInfo(sessionKey);
-          
+
           if (!info) {
             continue;
           }
 
           const sessionDate = new Date(info.createdAt);
-          
+
           // Only archive sessions older than cutoff
           if (sessionDate < cutoffDate) {
             const success = await this.archiveSession(sessionKey);
-            
+
             if (success) {
               archived.push(sessionKey);
               await this.redisStore.deleteSession(sessionKey);
@@ -112,11 +112,13 @@ export class SessionArchiver {
           console.error(`[session-archiver] Error processing session ${sessionKey}:`, err);
           failed++;
         }
-        
+
         processed++;
       }
 
-      console.log(`[session-archiver] Archive complete: ${archived.length} archived, ${failed} failed`);
+      console.log(
+        `[session-archiver] Archive complete: ${archived.length} archived, ${failed} failed`,
+      );
       return { archived: archived.length, failed, sessions: archived };
     } catch (err) {
       console.error("[session-archiver] Archive process failed:", err);
@@ -130,20 +132,18 @@ export class SessionArchiver {
   private async archiveSession(sessionKey: string): Promise<boolean> {
     try {
       const messages = await this.redisStore.getAllMessages(sessionKey);
-      
+
       if (messages.length === 0) {
         return true; // Nothing to archive, consider success
       }
 
       // Format messages as conversation text
-      const content = messages
-        .map((m) => `[${m.timestamp}] ${m.role}: ${m.content}`)
-        .join("\n\n");
+      const content = messages.map((m) => `[${m.timestamp}] ${m.role}: ${m.content}`).join("\n\n");
 
       const id = randomUUID();
       const importance = 30; // Lower importance for archived sessions
       const detailLevel = 2; // Detailed
-      
+
       // Get first and last message timestamps
       const firstMsg = messages[0];
       const lastMsg = messages[messages.length - 1];
@@ -165,10 +165,14 @@ export class SessionArchiver {
       // Insert into long_term.memories
       const cmd = [
         this.psqlPath,
-        "-U", this.config.postgresqlConfig.user,
-        "-d", this.config.postgresqlConfig.database,
-        "-h", this.config.postgresqlConfig.host,
-        "-p", String(this.config.postgresqlConfig.port),
+        "-U",
+        this.config.postgresqlConfig.user,
+        "-d",
+        this.config.postgresqlConfig.database,
+        "-h",
+        this.config.postgresqlConfig.host,
+        "-p",
+        String(this.config.postgresqlConfig.port),
         "-c",
         `INSERT INTO long_term.memories 
          (id, content, importance, detail_level, created_at, last_accessed, access_count, needs_embedding) 
@@ -187,7 +191,9 @@ export class SessionArchiver {
       const { execSync } = await import("child_process");
       execSync(cmd, { encoding: "utf-8" });
 
-      console.log(`[session-archiver] Stored session ${sessionKey} with ${messages.length} messages`);
+      console.log(
+        `[session-archiver] Stored session ${sessionKey} with ${messages.length} messages`,
+      );
       return true;
     } catch (err) {
       console.error(`[session-archiver] Failed to archive session ${sessionKey}:`, err);
@@ -214,9 +220,10 @@ export class SessionArchiver {
     }
 
     // Estimate total messages
-    const estimatedMessages = sessions.length > 0 
-      ? Math.round(redisMessages * (sessions.length / Math.max(sessions.length, 10)))
-      : 0;
+    const estimatedMessages =
+      sessions.length > 0
+        ? Math.round(redisMessages * (sessions.length / Math.max(sessions.length, 10)))
+        : 0;
 
     return {
       redisSessions: sessions.length,

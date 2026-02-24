@@ -29,10 +29,10 @@ Captures conversation messages in real-time and stores them to Redis for short-t
 
 This hook implements a two-tier memory system:
 
-| Tier | Storage | Retention | Use Case |
-|------|---------|-----------|----------|
-| Short-term | Redis | 7 days | Recent conversations, quick access |
-| Long-term | PostgreSQL | Forever | Archived memories, semantic search |
+| Tier       | Storage    | Retention | Use Case                           |
+| ---------- | ---------- | --------- | ---------------------------------- |
+| Short-term | Redis      | 7 days    | Recent conversations, quick access |
+| Long-term  | PostgreSQL | Forever   | Archived memories, semantic search |
 
 ## Requirements
 

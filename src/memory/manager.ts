@@ -42,11 +42,10 @@ import {
 } from "./internal.js";
 import { searchKeyword, searchVector } from "./manager-search.js";
 import { ensureMemoryIndexSchema } from "./memory-schema.js";
-import { loadSqliteVecExtension } from "./sqlite-vec.js";
-import { requireNodeSqlite } from "./sqlite.js";
-
 // PostgreSQL store (lazy import)
 import { PostgreSQLMemoryStore, type MemoryEntry } from "./postgresql-store.js";
+import { loadSqliteVecExtension } from "./sqlite-vec.js";
+import { requireNodeSqlite } from "./sqlite.js";
 
 type MemorySource = "memory" | "sessions";
 
@@ -232,13 +231,20 @@ export class MemoryIndexManager {
     this.openAi = params.providerResult.openAi;
     this.gemini = params.providerResult.gemini;
     this.sources = new Set(params.settings.sources);
-    
+
     // Check if using PostgreSQL
     this.usePostgreSQL = params.settings.store.driver === "postgresql";
-    
+
     if (this.usePostgreSQL) {
       // Initialize PostgreSQL store
-      const pgConfig = params.settings.store as { driver: "postgresql"; host: string; port: number; database: string; user: string; password?: string };
+      const pgConfig = params.settings.store as {
+        driver: "postgresql";
+        host: string;
+        port: number;
+        database: string;
+        user: string;
+        password?: string;
+      };
       this.pgStore = new PostgreSQLMemoryStore({
         host: pgConfig.host,
         port: pgConfig.port,
@@ -250,14 +256,14 @@ export class MemoryIndexManager {
       this.db = this.openDatabase();
       this.ensureSchema();
     }
-    
+
     this.providerKey = this.computeProviderKey();
     this.cache = {
       enabled: params.settings.cache.enabled,
       maxEntries: params.settings.cache.maxEntries,
     };
     this.fts = { enabled: params.settings.query.hybrid.enabled, available: false };
-    
+
     if (!this.usePostgreSQL) {
       this.vector = {
         enabled: params.settings.store.vector.enabled,
@@ -275,7 +281,7 @@ export class MemoryIndexManager {
         dims: 1536,
       };
     }
-    
+
     this.ensureWatcher();
     this.ensureSessionListener();
     this.ensureIntervalSync();
@@ -313,20 +319,22 @@ export class MemoryIndexManager {
         await this.pgStore.initialize();
         const queryVec = await this.embedQueryWithTimeout(query);
         const memories = await this.pgStore.searchSimilar(queryVec, opts?.maxResults ?? 10);
-        return memories.map((m: MemoryEntry): MemorySearchResult => ({
-          path: String(m.metadata?.file || m.id),
-          startLine: 1,
-          endLine: 100,
-          score: 0.9, // PostgreSQL returns unscaled similarity
-          snippet: m.content?.slice(0, 500) || "",
-          source: (m.source || "memory") as MemorySearchResult["source"],
-        }));
+        return memories.map(
+          (m: MemoryEntry): MemorySearchResult => ({
+            path: String(m.metadata?.file || m.id),
+            startLine: 1,
+            endLine: 100,
+            score: 0.9, // PostgreSQL returns unscaled similarity
+            snippet: m.content?.slice(0, 500) || "",
+            source: (m.source || "memory") as MemorySearchResult["source"],
+          }),
+        );
       } catch (err) {
         log.warn(`PostgreSQL search failed: ${err}`);
         return [];
       }
     }
-    
+
     void this.warmSession(opts?.sessionKey);
     if (this.settings.sync.onSearch && (this.dirty || this.sessionsDirty)) {
       void this.sync({ reason: "search" }).catch((err) => {
@@ -559,7 +567,12 @@ export class MemoryIndexManager {
   } {
     // PostgreSQL status
     if (this.usePostgreSQL) {
-      const pg = this.settings.store as { driver: "postgresql"; host: string; port: number; database: string };
+      const pg = this.settings.store as {
+        driver: "postgresql";
+        host: string;
+        port: number;
+        database: string;
+      };
       return {
         files: 0,
         chunks: 0,
@@ -579,7 +592,7 @@ export class MemoryIndexManager {
         },
       };
     }
-    
+
     const sourceFilter = this.buildSourceFilter();
     const files = this.db
       .prepare(`SELECT COUNT(*) as c FROM files WHERE 1=1${sourceFilter.sql}`)
@@ -627,9 +640,14 @@ export class MemoryIndexManager {
       chunks: chunks?.c ?? 0,
       dirty: this.dirty,
       workspaceDir: this.workspaceDir,
-      dbPath: this.usePostgreSQL 
+      dbPath: this.usePostgreSQL
         ? (() => {
-            const pg = this.settings.store as { driver: "postgresql"; host: string; port: number; database: string };
+            const pg = this.settings.store as {
+              driver: "postgresql";
+              host: string;
+              port: number;
+              database: string;
+            };
             return `postgresql://${pg.host}:${pg.port}/${pg.database}`;
           })()
         : (this.settings.store as { driver: "sqlite"; path: string }).path,
@@ -822,7 +840,11 @@ export class MemoryIndexManager {
       // PostgreSQL doesn't use SQLite database
       throw new Error("PostgreSQL driver doesn't use SQLite");
     }
-    const store = this.settings.store as { driver: "sqlite"; path: string; vector: { enabled: boolean; extensionPath?: string } };
+    const store = this.settings.store as {
+      driver: "sqlite";
+      path: string;
+      vector: { enabled: boolean; extensionPath?: string };
+    };
     const dbPath = resolveUserPath(store.path);
     return this.openDatabaseAtPath(dbPath);
   }
@@ -831,7 +853,10 @@ export class MemoryIndexManager {
     const dir = path.dirname(dbPath);
     ensureDir(dir);
     const { DatabaseSync } = requireNodeSqlite();
-    const store = this.settings.store as { driver: "sqlite"; vector: { enabled: boolean; extensionPath?: string } };
+    const store = this.settings.store as {
+      driver: "sqlite";
+      vector: { enabled: boolean; extensionPath?: string };
+    };
     return new DatabaseSync(dbPath, { allowExtension: store.vector.enabled });
   }
 

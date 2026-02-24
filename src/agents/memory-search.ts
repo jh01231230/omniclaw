@@ -201,7 +201,10 @@ function mergeConfig(
       driver: "postgresql",
       host: (overridesStore?.host as string) ?? (defaultsStore?.host as string) ?? "localhost",
       port: (overridesStore?.port as number) ?? (defaultsStore?.port as number) ?? 5432,
-      database: (overridesStore?.database as string) ?? (defaultsStore?.database as string) ?? "openclaw_memory",
+      database:
+        (overridesStore?.database as string) ??
+        (defaultsStore?.database as string) ??
+        "openclaw_memory",
       user: (overridesStore?.user as string) ?? (defaultsStore?.user as string) ?? "tars",
       password: (overridesStore?.password as string) ?? (defaultsStore?.password as string),
       vector,
@@ -209,7 +212,10 @@ function mergeConfig(
   } else {
     store = {
       driver: "sqlite",
-      path: resolveStorePath(agentId, (overridesStore?.path as string) ?? (defaultsStore?.path as string)),
+      path: resolveStorePath(
+        agentId,
+        (overridesStore?.path as string) ?? (defaultsStore?.path as string),
+      ),
       vector,
     };
   }

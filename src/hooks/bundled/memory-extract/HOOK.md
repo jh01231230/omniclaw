@@ -4,16 +4,13 @@ description: "Extract keyframes from conversations to long-term memory"
 homepage: https://docs.omniclaw.ai/hooks#memory-extract
 metadata:
   {
-    "omniclaw": {
-      "emoji": "🧠",
-      "events": ["session:end", "heartbeat"],
-      "requires": {
-        "config": ["agents.defaults.memorySearch.deployment"]
+    "omniclaw":
+      {
+        "emoji": "🧠",
+        "events": ["session:end", "heartbeat"],
+        "requires": { "config": ["agents.defaults.memorySearch.deployment"] },
+        "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }],
       },
-      "install": [
-        { "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }
-      ]
-    }
   }
 ---
 
@@ -28,6 +25,7 @@ Automatically enabled when `memorySearch.deployment = "full"`.
 ## Memory Triggers
 
 The hook extracts memories when:
+
 - Important decisions are made
 - Patterns appear 3+ times
 - Emotional peaks detected
@@ -44,6 +42,7 @@ The hook extracts memories when:
 ## Database Schema
 
 Requires `long_term_memory` table with pgvector:
+
 ```sql
 CREATE TABLE long_term_memory (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

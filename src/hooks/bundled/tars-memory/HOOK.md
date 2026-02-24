@@ -4,14 +4,13 @@ description: "Auto-start TARS Memory services (PostgreSQL, Redis) on gateway sta
 homepage: https://docs.omniclaw.ai/hooks#tars-memory
 metadata:
   {
-    "omniclaw": {
-      "emoji": "💾",
-      "events": ["gateway:startup"],
-      "requires": {},
-      "install": [
-        { "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }
-      ]
-    }
+    "omniclaw":
+      {
+        "emoji": "💾",
+        "events": ["gateway:startup"],
+        "requires": {},
+        "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }],
+      },
   }
 ---
 
@@ -20,6 +19,7 @@ metadata:
 Automatically starts TARS Memory services (PostgreSQL, Redis) when the gateway starts.
 
 This hook ensures:
+
 - TARS Memory (Optane) is mounted
 - PostgreSQL 17 is started
 - Redis is started

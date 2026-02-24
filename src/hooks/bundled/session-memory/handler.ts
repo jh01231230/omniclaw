@@ -6,11 +6,11 @@
  * Minimal mode (SQLite): writes to memory files
  */
 
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID } from "node:crypto";
 import type { OmniClawConfig } from "../../../config/config.js";
 import type { HookHandler } from "../../hooks.js";
 import { resolveAgentWorkspaceDir } from "../../../agents/agent-scope.js";
@@ -46,7 +46,7 @@ async function storeToPostgreSQL(
     const tagsStr = "ARRAY['session-memory']";
     execSync(
       `${psqlPath} -U tars -d openclaw_memory -h localhost -p 5432 -c "INSERT INTO memories (id, content, metadata, source, importance, tags, created_at) VALUES ('${id}', E'${content.replace(/'/g, "''")}', '${metadataStr}'::jsonb, '${source}', ${importance}, ${tagsStr}, NOW())"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     );
     console.log("[session-memory] Stored to PostgreSQL:", id);
   } catch (err) {

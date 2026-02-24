@@ -1,7 +1,7 @@
 import { execSync, exec } from "node:child_process";
-import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { OmniClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "./prompts.js";
@@ -77,9 +77,12 @@ export async function autoInstallMemoryServices(
     // Try to install via apt first (faster)
     try {
       runtime.log("Attempting PostgreSQL installation via apt...");
-      execSync("sudo apt-get update && sudo apt-get install -y postgresql-17 postgresql-17-postgis-3 redis-server", {
-        stdio: "inherit",
-      });
+      execSync(
+        "sudo apt-get update && sudo apt-get install -y postgresql-17 postgresql-17-postgis-3 redis-server",
+        {
+          stdio: "inherit",
+        },
+      );
     } catch {
       // If apt fails, use the custom installer script
       runtime.log("apt install failed, using custom installer...");
@@ -441,7 +444,7 @@ export async function promptMemoryDeployment(
   if (options?.memoryMode) {
     type = options.memoryMode;
   } else {
-    type = await prompter.select({
+    type = (await prompter.select({
       message: "Choose memory deployment type",
       options: [
         {
@@ -456,7 +459,7 @@ export async function promptMemoryDeployment(
         },
       ],
       initialValue: "minimal",
-    }) as MemoryDeploymentType;
+    })) as MemoryDeploymentType;
   }
 
   const config: MemoryDeploymentConfig = {
@@ -490,7 +493,10 @@ export async function promptMemoryDeployment(
         }
       } catch (err) {
         runtime.error(`Auto-install failed: ${err}`);
-        await prompter.note("Auto-install failed. Please install manually or use minimal mode.", "Memory Setup");
+        await prompter.note(
+          "Auto-install failed. Please install manually or use minimal mode.",
+          "Memory Setup",
+        );
         config.type = "minimal";
       }
     } else {
