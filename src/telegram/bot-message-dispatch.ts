@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import { resolveAgentDir } from "../agents/agent-scope.js";
 // @ts-nocheck
 import {
@@ -16,15 +17,13 @@ import { createReplyPrefixContext } from "../channels/reply-prefix.js";
 import { createTypingCallbacks } from "../channels/typing.js";
 import { OmniClawConfig } from "../config/config.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
+import { enqueueInterleavedMessage, isSessionActive } from "../gateway/chat-abort.js";
 import { danger, logVerbose } from "../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
 import { deliverReplies } from "./bot/delivery.js";
 import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
-import { enqueueInterleavedMessage, isSessionActive } from "../gateway/chat-abort.js";
-
-import * as fs from "fs";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
@@ -55,7 +54,10 @@ export const dispatchTelegramMessage = async ({
   resolveBotTopicsEnabled,
   // oxlint-disable-next-line typescript/no-explicit-any
 }: any) => {
-  fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " dispatchTelegramMessage called\n");
+  fs.appendFileSync(
+    "/tmp/dispatch-start.log",
+    new Date().toISOString() + " dispatchTelegramMessage called\n",
+  );
   const {
     ctxPayload,
     primaryCtx,
@@ -78,9 +80,12 @@ export const dispatchTelegramMessage = async ({
   // Check for stop command
   const messageText = ctxPayload.Body?.toString().trim().toLowerCase() || "";
   const isStopCommand = messageText === "/stop" || messageText === "停止" || messageText === "stop";
-  
+
   if (isStopCommand) {
-    fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " STOP command - letting system handle it\n");
+    fs.appendFileSync(
+      "/tmp/dispatch-start.log",
+      new Date().toISOString() + " STOP command - letting system handle it\n",
+    );
     // Let the message flow through normally - the system will detect the stop command
     // and abort any running sessions
   }
@@ -89,12 +94,15 @@ export const dispatchTelegramMessage = async ({
   if (!isStopCommand && route.sessionKey && ctxPayload.Body) {
     const sessionKey = route.sessionKey;
     const messageBody = ctxPayload.Body.toString().trim();
-    
+
     if (messageBody && isSessionActive(sessionKey)) {
       // Session is running - queue the message
       enqueueInterleavedMessage(sessionKey, messageBody);
-      fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + ` Queued message for session ${sessionKey}\n`);
-      
+      fs.appendFileSync(
+        "/tmp/dispatch-start.log",
+        new Date().toISOString() + ` Queued message for session ${sessionKey}\n`,
+      );
+
       // Send acknowledgment that message was queued
       return;
     }
@@ -365,19 +373,17 @@ export const dispatchTelegramMessage = async ({
   console.log("[session-capture] Triggering agent event for session:", route.sessionKey);
   try {
     const agentResponse = "";
-    const agentEvent = createInternalHookEvent(
-      "agent",
-      "complete",
-      route.sessionKey,
-      {
-        cfg,
-        channel: "telegram",
-        response: agentResponse,
-        success: hasFinalResponse,
-      },
-    );
+    const agentEvent = createInternalHookEvent("agent", "complete", route.sessionKey, {
+      cfg,
+      channel: "telegram",
+      response: agentResponse,
+      success: hasFinalResponse,
+    });
     void triggerInternalHook(agentEvent);
-    fs.appendFileSync("/tmp/bot-message-trigger.log", `${new Date().toISOString()} triggered agent event\n`);
+    fs.appendFileSync(
+      "/tmp/bot-message-trigger.log",
+      `${new Date().toISOString()} triggered agent event\n`,
+    );
   } catch (err) {
     logVerbose(`[session-capture] Failed to trigger agent hook: ${err}`);
   }

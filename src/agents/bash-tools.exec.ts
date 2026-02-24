@@ -1022,7 +1022,10 @@ export function createExecTool(
       const sudoAuth = defaults?.sudo?.auth === "nopasswd" ? "nopasswd" : "password";
       const sudoAllowlist = normalizeSudoAllowlist(defaults?.sudo?.allow);
       // Use sudo when elevated is requested OR when sudo mode is always/consent
-      const shouldUseSudo = host === "gateway" && (elevatedRequested || sudoMode === "always" || sudoMode === "consent") && sudoMode !== "never";
+      const shouldUseSudo =
+        host === "gateway" &&
+        (elevatedRequested || sudoMode === "always" || sudoMode === "consent") &&
+        sudoMode !== "never";
       const sudoConsentRequired = shouldUseSudo && sudoMode === "consent";
       const bypassApprovals = elevatedRequested && elevatedMode === "full" && !sudoConsentRequired;
       if (bypassApprovals) {

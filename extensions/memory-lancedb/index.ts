@@ -10,8 +10,8 @@ import type { OmniClawPluginApi } from "omniclaw/plugin-sdk";
 import * as lancedb from "@lancedb/lancedb";
 import { Type } from "@sinclair/typebox";
 import { randomUUID } from "node:crypto";
-import OpenAI from "openai";
 import { stringEnum } from "omniclaw/plugin-sdk";
+import OpenAI from "openai";
 import {
   MEMORY_CATEGORIES,
   type MemoryCategory,

@@ -1,6 +1,6 @@
 /**
  * Autowork Database Operations
- * 
+ *
  * Query and update memory database for task management
  */
 
@@ -67,11 +67,11 @@ function execPg(sql: string, params?: Record<string, string>): string {
 
   // Build psql command
   let cmd = `${psqlPath} -h ${host} -p ${port} -U ${user} -d ${database} -t -A -F"|"`;
-  
+
   if (params) {
     // Replace named params
     for (const [key, value] of Object.entries(params)) {
-      sql = sql.replace(new RegExp(`:${key}`, 'g'), value.replace(/'/g, "''"));
+      sql = sql.replace(new RegExp(`:${key}`, "g"), value.replace(/'/g, "''"));
     }
   }
 
@@ -101,17 +101,20 @@ export function queryPendingTasks(limit: number = 10): DbMemory[] {
     const result = execPg(sql);
     if (!result) return [];
 
-    return result.split("\n").filter(Boolean).map(line => {
-      const [id, content, metadata, importance_score, created_at, detail_level] = line.split("|");
-      return {
-        id,
-        content,
-        metadata: JSON.parse(metadata || "{}"),
-        importance_score: parseFloat(importance_score) || 0.5,
-        created_at,
-        detail_level,
-      };
-    });
+    return result
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [id, content, metadata, importance_score, created_at, detail_level] = line.split("|");
+        return {
+          id,
+          content,
+          metadata: JSON.parse(metadata || "{}"),
+          importance_score: parseFloat(importance_score) || 0.5,
+          created_at,
+          detail_level,
+        };
+      });
   } catch (err) {
     taskLog("DB", "ERROR", "Failed to query pending tasks", { error: String(err) });
     return [];
@@ -127,7 +130,7 @@ export function updateTaskStatus(
   additionalMeta?: Record<string, unknown>,
 ): boolean {
   const meta = JSON.stringify({ status, ...additionalMeta }).replace(/'/g, "''");
-  
+
   const sql = `
     UPDATE long_term_memory
     SET metadata = '${meta}'::jsonb,
@@ -218,11 +221,14 @@ export function appendTaskNote(taskId: string, note: string): boolean {
   if (!task) return false;
 
   const existingNotes = (task.metadata.notes as string[]) || [];
-  const newNotes = [...existingNotes, { 
-    content: note, 
-    timestamp: new Date().toISOString() 
-  }];
-  
+  const newNotes = [
+    ...existingNotes,
+    {
+      content: note,
+      timestamp: new Date().toISOString(),
+    },
+  ];
+
   const meta = JSON.stringify({
     ...task.metadata,
     notes: newNotes,

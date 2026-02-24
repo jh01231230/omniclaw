@@ -12,7 +12,7 @@ import { maybeGenerateFollowUp, isCasualMessage } from "./intent-tracking.js";
 registerInternalHook("command", async (event) => {
   // Only process user commands
   const ctx = event.context as { message?: string; isUser?: boolean };
-  
+
   if (!ctx.message || !ctx.isUser) {
     return;
   }
@@ -20,7 +20,7 @@ registerInternalHook("command", async (event) => {
   // Check if this is a casual message that might need follow-up
   if (isCasualMessage(ctx.message)) {
     const followUp = await maybeGenerateFollowUp(ctx.message, true);
-    
+
     if (followUp) {
       // Add follow-up message to the event
       event.messages.push(followUp);
@@ -33,7 +33,7 @@ registerInternalHook("command", async (event) => {
  */
 registerInternalHook("session", async (event) => {
   const ctx = event.context as { lastUserMessage?: string };
-  
+
   if (!ctx.lastUserMessage) {
     return;
   }

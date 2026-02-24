@@ -69,7 +69,9 @@ export function registerInternalHook(eventKey: string, handler: InternalHookHand
     handlers.set(eventKey, []);
   }
   handlers.get(eventKey)!.push(handler);
-  console.log(`[internal-hooks] Registered handler for: ${eventKey} (total: ${handlers.get(eventKey)!.length})`);
+  console.log(
+    `[internal-hooks] Registered handler for: ${eventKey} (total: ${handlers.get(eventKey)!.length})`,
+  );
 }
 
 /**
@@ -132,7 +134,9 @@ export async function triggerInternalHook(event: InternalHookEvent): Promise<voi
     return;
   }
 
-  console.log(`[internal-hooks] Triggering ${allHandlers.length} handler(s) for ${event.type}:${event.action}`);
+  console.log(
+    `[internal-hooks] Triggering ${allHandlers.length} handler(s) for ${event.type}:${event.action}`,
+  );
 
   for (const handler of allHandlers) {
     try {

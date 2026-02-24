@@ -4,9 +4,9 @@
  */
 
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
 
@@ -22,36 +22,33 @@ export async function detectIntent(text: string): Promise<IntentResult> {
   try {
     const { stdout, stderr } = await execAsync(
       `python3 "${SCRIPT_PATH}" process -t "${text.replace(/"/g, '\\"')}"`,
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
-    
+
     const output = stdout.trim();
     if (output) {
       return {
         action: "follow_up",
-        message: output
+        message: output,
       };
     }
-    
+
     return {
       action: "none",
-      message: null
+      message: null,
     };
   } catch (err) {
     console.error("Intent detection error:", err);
     return {
       action: "none",
-      message: null
+      message: null,
     };
   }
 }
 
 export async function getIntentStatus(): Promise<string> {
   try {
-    const { stdout } = await execAsync(
-      `python3 "${SCRIPT_PATH}" status`,
-      { timeout: 5000 }
-    );
+    const { stdout } = await execAsync(`python3 "${SCRIPT_PATH}" status`, { timeout: 5000 });
     return stdout.trim();
   } catch {
     return "Intent tracking unavailable";
@@ -74,8 +71,8 @@ export function isCasualMessage(text: string): boolean {
     /^hello/,
     /^hey/,
   ];
-  
-  return casualPatterns.some(pattern => pattern.test(text.trim().toLowerCase()));
+
+  return casualPatterns.some((pattern) => pattern.test(text.trim().toLowerCase()));
 }
 
 /**
@@ -83,13 +80,13 @@ export function isCasualMessage(text: string): boolean {
  */
 export async function maybeGenerateFollowUp(
   message: string,
-  isUserMessage: boolean = true
+  isUserMessage: boolean = true,
 ): Promise<string | null> {
   if (!isUserMessage) return null;
-  
+
   // Only trigger on casual messages
   if (!isCasualMessage(message)) return null;
-  
+
   const result = await detectIntent(message);
   return result.message;
 }

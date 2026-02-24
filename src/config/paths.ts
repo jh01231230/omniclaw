@@ -50,7 +50,10 @@ export function resolveStateDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
-  const override = env.OMNICLAW_STATE_DIR?.trim() || env.OMNICLAW_STATE_DIR?.trim() || env.CLAWDBOT_STATE_DIR?.trim();
+  const override =
+    env.OMNICLAW_STATE_DIR?.trim() ||
+    env.OMNICLAW_STATE_DIR?.trim() ||
+    env.CLAWDBOT_STATE_DIR?.trim();
   if (override) {
     return resolveUserPath(override);
   }
@@ -96,7 +99,10 @@ export function resolveCanonicalConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   stateDir: string = resolveStateDir(env, os.homedir),
 ): string {
-  const override = env.OMNICLAW_CONFIG_PATH?.trim() || env.OMNICLAW_CONFIG_PATH?.trim() || env.CLAWDBOT_CONFIG_PATH?.trim();
+  const override =
+    env.OMNICLAW_CONFIG_PATH?.trim() ||
+    env.OMNICLAW_CONFIG_PATH?.trim() ||
+    env.CLAWDBOT_CONFIG_PATH?.trim();
   if (override) {
     return resolveUserPath(override);
   }
@@ -172,13 +178,19 @@ export function resolveDefaultConfigCandidates(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string[] {
-  const explicit = env.OMNICLAW_CONFIG_PATH?.trim() || env.OMNICLAW_CONFIG_PATH?.trim() || env.CLAWDBOT_CONFIG_PATH?.trim();
+  const explicit =
+    env.OMNICLAW_CONFIG_PATH?.trim() ||
+    env.OMNICLAW_CONFIG_PATH?.trim() ||
+    env.CLAWDBOT_CONFIG_PATH?.trim();
   if (explicit) {
     return [resolveUserPath(explicit)];
   }
 
   const candidates: string[] = [];
-  const omniclawStateDir = env.OMNICLAW_STATE_DIR?.trim() || env.OMNICLAW_STATE_DIR?.trim() || env.CLAWDBOT_STATE_DIR?.trim();
+  const omniclawStateDir =
+    env.OMNICLAW_STATE_DIR?.trim() ||
+    env.OMNICLAW_STATE_DIR?.trim() ||
+    env.CLAWDBOT_STATE_DIR?.trim();
   if (omniclawStateDir) {
     const resolved = resolveUserPath(omniclawStateDir);
     candidates.push(path.join(resolved, CONFIG_FILENAME));
@@ -237,7 +249,10 @@ export function resolveGatewayPort(
   cfg?: OmniClawConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): number {
-  const envRaw = env.OMNICLAW_GATEWAY_PORT?.trim() || env.OMNICLAW_GATEWAY_PORT?.trim() || env.CLAWDBOT_GATEWAY_PORT?.trim();
+  const envRaw =
+    env.OMNICLAW_GATEWAY_PORT?.trim() ||
+    env.OMNICLAW_GATEWAY_PORT?.trim() ||
+    env.CLAWDBOT_GATEWAY_PORT?.trim();
   if (envRaw) {
     const parsed = Number.parseInt(envRaw, 10);
     if (Number.isFinite(parsed) && parsed > 0) {

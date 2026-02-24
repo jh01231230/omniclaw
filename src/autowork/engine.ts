@@ -1,6 +1,6 @@
 /**
  * Autowork Task Engine
- * 
+ *
  * Idle task execution with user notification:
  * - Start: notify plan
  * - Progress: periodic updates
@@ -10,17 +10,23 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { initAutoworkLogger, taskLog, listAuditLogDates, getAuditLog, type TaskStatus } from "./logger.js";
-import { createBranch, commitChanges, getGitStatus, isGitRepo } from "./git.js";
-import { 
-  initAutoworkDb, 
-  queryPendingTasks, 
+import {
+  initAutoworkDb,
+  queryPendingTasks,
   updateTaskStatus as dbUpdateTaskStatus,
   createTask,
   getTaskById,
   pingDb,
-  type DbMemory 
+  type DbMemory,
 } from "./db.js";
+import { createBranch, commitChanges, getGitStatus, isGitRepo } from "./git.js";
+import {
+  initAutoworkLogger,
+  taskLog,
+  listAuditLogDates,
+  getAuditLog,
+  type TaskStatus,
+} from "./logger.js";
 
 // ===== Types =====
 
@@ -37,14 +43,14 @@ export interface TodoTask {
 export interface AutoworkConfig {
   enabled: boolean;
   memoryMode: "minimal" | "full";
-  idleMinutes: number;          // How long idle before scanning
+  idleMinutes: number; // How long idle before scanning
   reportIntervalMinutes: number; // Progress report frequency
   maxConcurrent: number;
-  workDir?: string;             // Working directory for git
+  workDir?: string; // Working directory for git
   sources: TaskSource[];
 }
 
-export type TaskSource = 
+export type TaskSource =
   | { type: "memory-db"; query?: string }
   | { type: "code-todos"; paths?: string[] }
   | { type: "github-issues"; repo?: string };
@@ -83,10 +89,10 @@ export function initAutowork(
   config = cfg;
   messageCallback = sendMessage || null;
   initAutoworkLogger(cfg.memoryMode);
-  
-  taskLog("SYSTEM", "INIT", "Autowork initialized", { 
-    enabled: cfg.enabled, 
-    memoryMode: cfg.memoryMode 
+
+  taskLog("SYSTEM", "INIT", "Autowork initialized", {
+    enabled: cfg.enabled,
+    memoryMode: cfg.memoryMode,
   });
 }
 
@@ -114,9 +120,9 @@ export async function scanForTasks(): Promise<TodoTask[]> {
 
   // Sort by importance
   tasks.sort((a, b) => b.importance - a.importance);
-  
-  taskLog("SCANNER", "FOUND", `Found ${tasks.length} pending tasks`, { 
-    count: tasks.length 
+
+  taskLog("SCANNER", "FOUND", `Found ${tasks.length} pending tasks`, {
+    count: tasks.length,
   });
 
   return tasks.slice(0, config.maxConcurrent);
@@ -168,10 +174,8 @@ export async function startTask(task: TodoTask, plan: string[]): Promise<void> {
   // Notify user of the plan
   const planText = plan.map((step, i) => `${i + 1}. ${step}`).join("\n");
   notifyUser(
-    `🤔 **开始新任务**\n\n` +
-    `**任务**: ${task.title}\n\n` +
-    `**执行计划**:\n${planText}`,
-    { isStartNotification: true }
+    `🤔 **开始新任务**\n\n` + `**任务**: ${task.title}\n\n` + `**执行计划**:\n${planText}`,
+    { isStartNotification: true },
   );
 }
 
@@ -183,12 +187,16 @@ export async function executeCurrentStep(): Promise<boolean> {
 
   currentTask.status = "executing";
   const step = currentTask.plan[currentTask.currentStep];
-  
-  taskLog(currentTask.taskId, "EXECUTING", `Executing step ${currentTask.currentStep + 1}: ${step}`);
+
+  taskLog(
+    currentTask.taskId,
+    "EXECUTING",
+    `Executing step ${currentTask.currentStep + 1}: ${step}`,
+  );
 
   // TODO: Use sub-agent to execute the step
   // For now, return true to simulate completion
-  
+
   return true;
 }
 
@@ -207,7 +215,7 @@ export async function advanceTask(): Promise<void> {
     // More steps - check if we should report progress
     const now = Date.now();
     const minutesSinceStart = (now - new Date(currentTask.startedAt).getTime()) / 60000;
-    
+
     if (minutesSinceStart > config!.reportIntervalMinutes) {
       await sendProgressReport();
     }
@@ -232,13 +240,13 @@ async function sendProgressReport(): Promise<void> {
   });
 
   const nextStep = currentTask.plan[currentTask.currentStep] || "完成";
-  
+
   notifyUser(
     `📊 **任务进度**\n\n` +
-    `**${currentTask.task.title}**\n` +
-    `进度: ${progress}% (${step}/${total})\n` +
-    `下一步: ${nextStep}`,
-    { isProgressNotification: true }
+      `**${currentTask.task.title}**\n` +
+      `进度: ${progress}% (${step}/${total})\n` +
+      `下一步: ${nextStep}`,
+    { isProgressNotification: true },
   );
 }
 
@@ -249,19 +257,19 @@ export function blockTask(reason: string, requiresUserAction: string): void {
   if (!currentTask) return;
 
   currentTask.status = "blocked";
-  
+
   taskLog(currentTask.taskId, "BLOCKED", `Task blocked: ${reason}`, { reason, requiresUserAction });
 
   // Check anti-spam before alerting user
   const shouldAlert = shouldAlertUser(requiresUserAction);
-  
+
   if (shouldAlert) {
     notifyUser(
       `⚠️ **任务阻塞**\n\n` +
-      `**任务**: ${currentTask.task.title}\n\n` +
-      `**原因**: ${reason}\n\n` +
-      `**需要你**: ${requiresUserAction}`,
-      { isBlockedNotification: true, blockingReason: requiresUserAction }
+        `**任务**: ${currentTask.task.title}\n\n` +
+        `**原因**: ${reason}\n\n` +
+        `**需要你**: ${requiresUserAction}`,
+      { isBlockedNotification: true, blockingReason: requiresUserAction },
     );
   }
 }
@@ -283,10 +291,8 @@ export async function completeTask(): Promise<void> {
   // Get git status for summary
   const workDir = config.workDir || process.cwd();
   const status = isGitRepo(workDir) ? getGitStatus(workDir) : null;
-  
-  const changes = status 
-    ? [...status.modified, ...status.untracked].join(", ") || "无" 
-    : "N/A";
+
+  const changes = status ? [...status.modified, ...status.untracked].join(", ") || "无" : "N/A";
 
   // Commit changes if in git repo
   if (isGitRepo(workDir)) {
@@ -294,17 +300,17 @@ export async function completeTask(): Promise<void> {
       currentTask.taskId,
       `complete: ${currentTask.task.title}`,
       undefined,
-      workDir
+      workDir,
     );
   }
 
   // Notify completion
   notifyUser(
     `✅ **任务完成**\n\n` +
-    `**${currentTask.task.title}**\n` +
-    `耗时: ${duration} 分钟\n` +
-    `改动: ${changes}`,
-    { isCompletionNotification: true }
+      `**${currentTask.task.title}**\n` +
+      `耗时: ${duration} 分钟\n` +
+      `改动: ${changes}`,
+    { isCompletionNotification: true },
   );
 
   // Update task in DB (mark as completed)
@@ -324,15 +330,18 @@ export async function failTask(reason: string): Promise<void> {
   currentTask.status = "failed";
   const duration = Math.round((Date.now() - new Date(currentTask.startedAt).getTime()) / 60000);
 
-  taskLog(currentTask.taskId, "FAILED", `Task failed: ${reason}`, { reason, durationMinutes: duration });
+  taskLog(currentTask.taskId, "FAILED", `Task failed: ${reason}`, {
+    reason,
+    durationMinutes: duration,
+  });
 
   // Notify failure
   notifyUser(
     `❌ **任务失败**\n\n` +
-    `**${currentTask.task.title}**\n` +
-    `原因: ${reason}\n` +
-    `耗时: ${duration} 分钟`,
-    { isFailureNotification: true }
+      `**${currentTask.task.title}**\n` +
+      `原因: ${reason}\n` +
+      `耗时: ${duration} 分钟`,
+    { isFailureNotification: true },
   );
 
   // Update task in DB (mark as failed)
@@ -378,10 +387,13 @@ function shouldAlertUser(content: string): boolean {
   }
 
   // Don't alert if same content within cooldown period
-  if (content === lastUserNotificationContent && minutesSinceLastAlert < USER_ALERT_COOLDOWN_MINUTES) {
-    taskLog("ALERT", "SKIPPED", "Same alert within cooldown period", { 
-      content, 
-      minutesSinceLastAlert 
+  if (
+    content === lastUserNotificationContent &&
+    minutesSinceLastAlert < USER_ALERT_COOLDOWN_MINUTES
+  ) {
+    taskLog("ALERT", "SKIPPED", "Same alert within cooldown period", {
+      content,
+      minutesSinceLastAlert,
     });
     return false;
   }
@@ -395,7 +407,7 @@ function shouldAlertUser(content: string): boolean {
  * Update task status in memory database
  */
 async function updateTaskStatus(
-  taskId: string, 
+  taskId: string,
   status: "pending" | "in_progress" | "completed" | "failed",
   metadata?: Record<string, unknown>,
 ): Promise<void> {
@@ -432,7 +444,11 @@ export async function autoworkTick(): Promise<boolean> {
   // Check if enough idle time has passed
   const idleMinutes = (Date.now() - lastScanTime) / 60000;
   if (idleMinutes < config.idleMinutes && lastScanTime > 0) {
-    taskLog("TICK", "IDLE", `Not enough idle time: ${Math.round(idleMinutes)}/${config.idleMinutes} min`);
+    taskLog(
+      "TICK",
+      "IDLE",
+      `Not enough idle time: ${Math.round(idleMinutes)}/${config.idleMinutes} min`,
+    );
     return false;
   }
 
@@ -449,14 +465,9 @@ export async function autoworkTick(): Promise<boolean> {
 
   // Pick highest priority task
   const task = tasks[0];
-  
+
   // Generate execution plan (simple for now)
-  const plan = [
-    "分析任务需求",
-    "编写/修改代码",
-    "测试验证",
-    "提交更改",
-  ];
+  const plan = ["分析任务需求", "编写/修改代码", "测试验证", "提交更改"];
 
   await startTask(task, plan);
   return true;

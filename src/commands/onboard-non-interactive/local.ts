@@ -4,6 +4,11 @@ import type { OnboardOptions } from "../onboard-types.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
+import {
+  applyMemoryDeploymentConfig,
+  autoInstallMemoryServices,
+  type MemoryDeploymentConfig,
+} from "../../wizard/onboarding.memory.js";
 import { DEFAULT_GATEWAY_DAEMON_RUNTIME } from "../daemon-runtime.js";
 import { healthCommand } from "../health.js";
 import {
@@ -13,6 +18,7 @@ import {
   resolveControlUiLinks,
   waitForGatewayReachable,
 } from "../onboard-helpers.js";
+import { ensureMemoryDir } from "../onboard-helpers.js";
 import { applyNonInteractiveAuthChoice } from "./local/auth-choice.js";
 import { installGatewayDaemonNonInteractive } from "./local/daemon-install.js";
 import { applyNonInteractiveGatewayConfig } from "./local/gateway-config.js";
@@ -20,12 +26,6 @@ import { logNonInteractiveOnboardingJson } from "./local/output.js";
 import { applyNonInteractiveSkillsConfig } from "./local/skills-config.js";
 import { resolveNonInteractiveWorkspaceDir } from "./local/workspace.js";
 import { applyNonInteractiveSandboxDefaults } from "./sandbox-defaults.js";
-import {
-  applyMemoryDeploymentConfig,
-  autoInstallMemoryServices,
-  type MemoryDeploymentConfig,
-} from "../../wizard/onboarding.memory.js";
-import { ensureMemoryDir } from "../onboard-helpers.js";
 
 export async function runNonInteractiveOnboardingLocal(params: {
   opts: OnboardOptions;

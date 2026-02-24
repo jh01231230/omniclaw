@@ -1,19 +1,19 @@
 /**
  * Autowork Logger
- * 
+ *
  * Task automation logging with daily rotation
  * Full mode: logs to /media/tars/TARS_MEMORY/autowork/logs/
  * Minimal mode: logs to ~/.omniclaw/memory/autowork/logs/
  */
 
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const log = createSubsystemLogger("autowork");
 
-export type TaskStatus = 
+export type TaskStatus =
   | "INIT"
   | "QUEUED"
   | "STARTED"
@@ -77,7 +77,7 @@ export function initAutoworkLogger(mode: MemoryMode): void {
  */
 async function getLogFile(): Promise<string> {
   const today = new Date().toISOString().split("T")[0];
-  
+
   // Check if we need to rotate to a new day
   if (logFilePath && currentDate === today) {
     return logFilePath;
@@ -85,10 +85,10 @@ async function getLogFile(): Promise<string> {
 
   const logDir = getLogDir();
   await fs.mkdir(logDir, { recursive: true });
-  
+
   logFilePath = path.join(logDir, `${today}.log`);
   currentDate = today;
-  
+
   log.debug("Log file ready", { logFilePath });
   return logFilePath;
 }
@@ -98,16 +98,16 @@ async function getLogFile(): Promise<string> {
  */
 function formatLogEntry(entry: LogEntry): string {
   const { timestamp, taskId, status, message, details } = entry;
-  
+
   let line = `[${timestamp}] [${taskId}] ${status.padEnd(11)} | ${message}`;
-  
+
   if (details && Object.keys(details).length > 0) {
     const detailsStr = Object.entries(details)
       .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
       .join(", ");
     line += ` | ${detailsStr}`;
   }
-  
+
   return line;
 }
 
@@ -135,10 +135,10 @@ export function taskLog(
   details?: Record<string, unknown>,
 ): void {
   const timestamp = new Date().toISOString();
-  
+
   // Also log to the main subsystem logger (goes to /tmp/omniclaw)
   const logData = { taskId, status, ...details };
-  
+
   switch (status) {
     case "STARTED":
     case "FOUND":
@@ -174,7 +174,7 @@ export function taskLog(
 export async function getAuditLog(date: string): Promise<string> {
   const logDir = getLogDir();
   const filePath = path.join(logDir, `${date}.log`);
-  
+
   try {
     return await fs.readFile(filePath, "utf-8");
   } catch {
@@ -188,18 +188,18 @@ export async function getAuditLog(date: string): Promise<string> {
 export async function getRecentAuditLogs(days: number = 7): Promise<Record<string, string>> {
   const logs: Record<string, string> = {};
   const today = new Date();
-  
+
   for (let i = 0; i < days; i++) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split("T")[0];
-    
+
     const content = await getAuditLog(dateStr);
     if (content) {
       logs[dateStr] = content;
     }
   }
-  
+
   return logs;
 }
 
@@ -208,12 +208,12 @@ export async function getRecentAuditLogs(days: number = 7): Promise<Record<strin
  */
 export async function listAuditLogDates(): Promise<string[]> {
   const logDir = getLogDir();
-  
+
   try {
     const files = await fs.readdir(logDir);
     return files
-      .filter(f => f.endsWith(".log"))
-      .map(f => f.replace(".log", ""))
+      .filter((f) => f.endsWith(".log"))
+      .map((f) => f.replace(".log", ""))
       .sort()
       .reverse();
   } catch {

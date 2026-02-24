@@ -1,6 +1,6 @@
 /**
  * Autowork Git Operations
- * 
+ *
  * Handles git operations for autowork tasks:
  * - Branch creation
  * - Auto-commit with规范的 message
@@ -8,8 +8,8 @@
  */
 
 import { execSync, exec } from "node:child_process";
-import path from "node:path";
 import fs from "node:fs";
+import path from "node:path";
 import { taskLog } from "./logger.js";
 
 const GIT_FORBIDDEN_PATHS = [".git"];
@@ -19,8 +19,11 @@ const GIT_FORBIDDEN_PATHS = [".git"];
  */
 function isForbiddenPath(targetPath: string): boolean {
   const normalized = path.normalize(targetPath);
-  return GIT_FORBIDDEN_PATHS.some(forbidden => 
-    normalized === forbidden || normalized.endsWith(`/${forbidden}`) || normalized.endsWith(`\\${forbidden}`)
+  return GIT_FORBIDDEN_PATHS.some(
+    (forbidden) =>
+      normalized === forbidden ||
+      normalized.endsWith(`/${forbidden}`) ||
+      normalized.endsWith(`\\${forbidden}`),
   );
 }
 
@@ -57,13 +60,13 @@ export function createBranch(
   cwd?: string,
 ): { success: boolean; branchName: string; error?: string } {
   const branchName = `autowork/${slug}`;
-  
+
   taskLog(taskId, "BRANCH", `Creating branch: ${branchName}`, { baseBranch, branchName });
 
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    
+
     if (!gitRoot) {
       const error = "Not a git repository";
       taskLog(taskId, "FAILED", error, { workDir });
@@ -72,8 +75,8 @@ export function createBranch(
 
     // Check if branch already exists
     const branches = execSync("git branch --list", { cwd: gitRoot, encoding: "utf-8" });
-    const branchExists = branches.split("\n").some(b => b.trim() === branchName);
-    
+    const branchExists = branches.split("\n").some((b) => b.trim() === branchName);
+
     if (branchExists) {
       // Checkout existing branch
       execSync(`git checkout ${branchName}`, { cwd: gitRoot, stdio: "pipe" });
@@ -102,13 +105,13 @@ export function commitChanges(
   cwd?: string,
 ): { success: boolean; commitHash?: string; error?: string } {
   const commitMessage = `[autowork] ${message}`;
-  
+
   taskLog(taskId, "COMMIT", `Committing changes: ${commitMessage}`, { files });
 
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    
+
     if (!gitRoot) {
       const error = "Not a git repository";
       taskLog(taskId, "FAILED", error, { workDir });
@@ -139,12 +142,15 @@ export function commitChanges(
     }
 
     // Commit
-    execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { cwd: gitRoot, stdio: "pipe" });
+    execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, {
+      cwd: gitRoot,
+      stdio: "pipe",
+    });
 
     // Get commit hash
     const hash = execSync("git rev-parse HEAD", { cwd: gitRoot, encoding: "utf-8" }).trim();
     const shortHash = hash.slice(0, 7);
-    
+
     taskLog(taskId, "COMMITTED", `Changes committed`, { commit: shortHash, fullHash: hash });
     return { success: true, commitHash: hash };
   } catch (err) {
@@ -162,10 +168,10 @@ export function getCurrentBranch(cwd?: string): string | null {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
     if (!gitRoot) return null;
-    
-    return execSync("git rev-parse --abbrev-ref HEAD", { 
-      cwd: gitRoot, 
-      encoding: "utf-8" 
+
+    return execSync("git rev-parse --abbrev-ref HEAD", {
+      cwd: gitRoot,
+      encoding: "utf-8",
     }).trim();
   } catch {
     return null;
@@ -180,17 +186,17 @@ export function getGitStatus(cwd?: string): { modified: string[]; untracked: str
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
     if (!gitRoot) return null;
-    
+
     const status = execSync("git status --porcelain", { cwd: gitRoot, encoding: "utf-8" });
-    
+
     const modified: string[] = [];
     const untracked: string[] = [];
-    
+
     for (const line of status.split("\n")) {
       if (!line.trim()) continue;
       const statusCode = line.slice(0, 2);
       const filePath = line.slice(3);
-      
+
       if (statusCode.includes("M") || statusCode.includes("D")) {
         if (!isForbiddenPath(filePath)) {
           modified.push(filePath);
@@ -202,7 +208,7 @@ export function getGitStatus(cwd?: string): { modified: string[]; untracked: str
         }
       }
     }
-    
+
     return { modified, untracked };
   } catch {
     return null;
@@ -222,7 +228,7 @@ export function checkoutBranch(
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    
+
     if (!gitRoot) {
       const error = "Not a git repository";
       return { success: false, error };
@@ -252,7 +258,7 @@ export function pushBranch(
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    
+
     if (!gitRoot) {
       return { success: false, error: "Not a git repository" };
     }
