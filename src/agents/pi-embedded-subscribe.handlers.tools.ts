@@ -238,5 +238,17 @@ export async function handleToolExecutionEnd(
       isError: isToolError,
       steer,
     });
+  } else if (ctx.params.sessionKey) {
+    // Default implementation: check for queued messages and inject them
+    const { dequeueInterleavedMessages } = await import("../gateway/chat-abort.js");
+    const messages = dequeueInterleavedMessages(ctx.params.sessionKey);
+    if (messages.length > 0) {
+      ctx.log.debug(
+        `interleaved mode: injecting ${messages.length} queued messages after tool ${toolName}`,
+      );
+      for (const msg of messages) {
+        await ctx.params.session.steer(msg);
+      }
+    }
   }
 }

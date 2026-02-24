@@ -22,6 +22,7 @@ import { deliverReplies } from "./bot/delivery.js";
 import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
+import { enqueueInterleavedMessage, isSessionActive } from "../gateway/chat-abort.js";
 
 import * as fs from "fs";
 
@@ -82,6 +83,21 @@ export const dispatchTelegramMessage = async ({
     fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + " STOP command - letting system handle it\n");
     // Let the message flow through normally - the system will detect the stop command
     // and abort any running sessions
+  }
+
+  // Check if session is running - if so, queue the message for interleaved mode
+  if (!isStopCommand && route.sessionKey && ctxPayload.Body) {
+    const sessionKey = route.sessionKey;
+    const messageBody = ctxPayload.Body.toString().trim();
+    
+    if (messageBody && isSessionActive(sessionKey)) {
+      // Session is running - queue the message
+      enqueueInterleavedMessage(sessionKey, messageBody);
+      fs.appendFileSync("/tmp/dispatch-start.log", new Date().toISOString() + ` Queued message for session ${sessionKey}\n`);
+      
+      // Send acknowledgment that message was queued
+      return;
+    }
   }
 
   const isPrivateChat = msg.chat.type === "private";

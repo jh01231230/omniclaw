@@ -20,6 +20,8 @@ import {
   abortChatRunById,
   abortChatRunsForSessionKey,
   isChatStopCommandText,
+  markSessionActive,
+  markSessionInactive,
   resolveChatRunExpiresAtMs,
 } from "../chat-abort.js";
 import { type ChatImageContent, parseMessageWithAttachments } from "../chat-attachments.js";
@@ -436,6 +438,9 @@ export const chatHandlers: GatewayRequestHandlers = {
         startedAtMs: now,
         expiresAtMs: resolveChatRunExpiresAtMs({ now, timeoutMs }),
       });
+      
+      // Mark session as active for interleaved mode
+      markSessionActive(p.sessionKey);
 
       const ackPayload = {
         runId: clientRunId,
@@ -589,6 +594,8 @@ export const chatHandlers: GatewayRequestHandlers = {
         })
         .finally(() => {
           context.chatAbortControllers.delete(clientRunId);
+          // Mark session as inactive for interleaved mode
+          markSessionInactive(p.sessionKey);
         });
     } catch (err) {
       const error = errorShape(ErrorCodes.UNAVAILABLE, String(err));
