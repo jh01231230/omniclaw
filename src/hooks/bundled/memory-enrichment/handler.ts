@@ -1,18 +1,26 @@
+/**
+ * Memory Enrichment Hook
+ * 
+ * Enriches stored memories with:
+ * 1. Conflict detection
+ * 2. Web search for updates
+ * 3. Time-sensitive refresh
+ */
+
 import { randomUUID } from "node:crypto";
 import { execSync } from "child_process";
 import type { HookHandler, InternalHookEvent } from "../../hooks.js";
 import { loadConfig } from "../../../config/config.js";
+import { 
+  unifiedSearch, 
+  detectConflicts, 
+  updateMemory, 
+  getMemoriesNeedingRefresh,
+  storeMemory,
+  type MemoryResult 
+} from "../../../agents/memory/unified-search.js";
 
 const PSQL_PATH = "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
-
-interface MemoryRecord {
-  id: string;
-  content: string;
-  importance: number;
-  source: string;
-  created_at: Date;
-  embedding?: number[];
-}
 
 /**
  * Execute psql command
@@ -27,9 +35,9 @@ function psqlExec(sql: string): string {
 /**
  * Query recent memories from PostgreSQL
  */
-async function queryRecentMemories(limit: number = 20): Promise<MemoryRecord[]> {
+async function queryRecentMemories(limit: number = 20): Promise<any[]> {
   const sql = `
-    SELECT id, content, importance, source, created_at 
+    SELECT id, content, importance, source, created_at, metadata
     FROM memories 
     WHERE needs_embedding = true OR embedding IS NULL
     ORDER BY created_at DESC 
@@ -47,77 +55,60 @@ async function queryRecentMemories(limit: number = 20): Promise<MemoryRecord[]> 
       content: parts[1]?.trim() || "",
       importance: parseInt(parts[2]?.trim() || "0"),
       source: parts[3]?.trim() || "",
-      created_at: new Date(parts[4]?.trim() || Date.now())
+      created_at: parts[4]?.trim() || "",
+      metadata: parts[5]?.trim() || "{}"
     };
   }).filter(m => m.id && m.content);
 }
 
 /**
- * Search for similar memories using pgvector
+ * Mark memory as processed
  */
-async function findSimilarMemories(content: string, threshold: number = 0.85): Promise<MemoryRecord[]> {
-  // Note: In production, we'd generate embeddings using an LLM
-  // For now, just return empty (no duplicates found)
-  // This is a placeholder for the full implementation
-  console.log("[memory-enrichment] Would search for similar to:", content.slice(0, 100));
-  return [];
-}
-
-/**
- * Web search for a query using curl (Brave API or similar)
- */
-async function webSearch(query: string): Promise<string> {
-  // Placeholder - would use Brave API or similar
-  // For now, just log
-  console.log("[memory-enrichment] Would search web for:", query);
-  return "";
-}
-
-/**
- * Detect potential conflicts in memories
- */
-async function detectConflicts(memoryId: string, content: string): Promise<string[]> {
-  // Placeholder for conflict detection
-  // Would compare semantic meaning and find contradictions
-  console.log("[memory-enrichment] Would check conflicts for:", memoryId);
-  return [];
+async function markMemoryProcessed(id: string): Promise<void> {
+  psqlExec(`UPDATE memories SET needs_embedding = false WHERE id = '${id}'`);
 }
 
 /**
  * Update memory with enrichment data
  */
-async function updateMemory(id: string, metadata: Record<string, unknown>): Promise<void> {
-  const metadataJson = JSON.stringify(metadata).replace(/'/g, "''");
-  const sql = `
-    UPDATE memories 
-    SET metadata = metadata || '${metadataJson}'::jsonb,
-        updated_at = NOW()
-    WHERE id = '${id}'
-  `;
-  psqlExec(sql);
+async function updateMemoryEnrichment(
+  id: string, 
+  data: { conflicts?: string[]; web_enriched?: boolean; search_terms?: string }
+): Promise<void> {
+  const sets: string[] = [];
+  
+  if (data.conflicts) {
+    sets.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{conflicts}', '${JSON.stringify(data.conflicts).replace(/'/g, "''")}'::jsonb)`);
+  }
+  if (data.web_enriched !== undefined) {
+    sets.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{web_enriched}', '${data.web_enriched}'::jsonb)`);
+  }
+  if (data.search_terms) {
+    sets.push(`metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{search_terms}', '${data.search_terms.replace(/'/g, "''")}'::jsonb)`);
+  }
+  
+  if (sets.length > 0) {
+    psqlExec(`UPDATE memories SET ${sets.join(", ")} WHERE id = '${id}'`);
+  }
 }
 
 /**
- * Mark memory as processed (no longer needs_embedding)
+ * Detect conflicts in memory content
  */
-async function markMemoryProcessed(id: string): Promise<void> {
-  const sql = `
-    UPDATE memories 
-    SET needs_embedding = false,
-        updated_at = NOW()
-    WHERE id = '${id}'
-  `;
-  psqlExec(sql);
+async function detectConflictsForMemory(memoryId: string, content: string): Promise<string[]> {
+  const conflicts = await detectConflicts(content, 0.6);
+  return conflicts.map(c => c.id);
 }
 
 /**
- * Main enrichment hook handler
+ * Main enrichment handler
  */
 const memoryEnrichment: HookHandler = async (event: InternalHookEvent) => {
   const eventType = event.type as string;
   
-  // Only run periodically
-  if (eventType !== "cron" && eventType !== "heartbeat") {
+  // Accept cron:hourly, cron:daily, or any cron-* event, plus heartbeat
+  const isCronEvent = eventType === "cron" || eventType.startsWith("cron:");
+  if (!isCronEvent && eventType !== "heartbeat") {
     return;
   }
 
@@ -136,54 +127,58 @@ const memoryEnrichment: HookHandler = async (event: InternalHookEvent) => {
   console.log("[memory-enrichment] Running memory enrichment for full mode...");
 
   try {
-    // Query memories that need processing
+    // 1. Process memories that need embedding
     const pendingMemories = await queryRecentMemories(10);
     
-    if (pendingMemories.length === 0) {
-      console.log("[memory-enrichment] No pending memories to enrich");
-      return;
-    }
+    if (pendingMemories.length > 0) {
+      console.log(`[memory-enrichment] Processing ${pendingMemories.length} memories`);
 
-    console.log(`[memory-enrichment] Processing ${pendingMemories.length} memories`);
-
-    for (const memory of pendingMemories) {
-      try {
-        // 1. Check for duplicates using pgvector
-        const similar = await findSimilarMemories(memory.content);
-        
-        if (similar.length > 0) {
-          console.log(`[memory-enrichment] Found ${similar.length} similar memories for ${memory.id}`);
-          // Could merge or mark as duplicate
-        }
-
-        // 2. Detect conflicts
-        const conflicts = await detectConflicts(memory.id, memory.content);
-        
-        if (conflicts.length > 0) {
-          console.log(`[memory-enrichment] Found ${conflicts.length} potential conflicts for ${memory.id}`);
-          await updateMemory(memory.id, { conflicts_detected: conflicts });
-        }
-
-        // 3. For high-importance memories, do web enrichment
-        if (memory.importance >= 40) {
-          // Extract key terms (simplified - would use NLP in production)
-          const keyTerms = memory.content.split(" ").slice(0, 5).join(" ");
-          const webInfo = await webSearch(keyTerms);
+      for (const memory of pendingMemories) {
+        try {
+          // Check for conflicts with existing memories
+          const conflicts = await detectConflictsForMemory(memory.id, memory.content);
           
-          if (webInfo) {
-            await updateMemory(memory.id, { web_enriched: true, search_terms: keyTerms });
+          if (conflicts.length > 0) {
+            console.log(`[memory-enrichment] Found ${conflicts.length} potential conflicts for ${memory.id}`);
+            await updateMemoryEnrichment(memory.id, { conflicts });
           }
-        }
 
-        // 4. Mark as processed
-        await markMemoryProcessed(memory.id);
-        
-      } catch (err) {
-        console.error(`[memory-enrichment] Error processing memory ${memory.id}:`, err);
+          // For high-importance memories, do web enrichment
+          if (memory.importance >= 40) {
+            // Extract key terms (simplified)
+            const keyTerms = memory.content.split(" ").slice(0, 5).join(" ");
+            console.log(`[memory-enrichment] Would search web for: ${keyTerms}`);
+            // Web search would go here
+            await updateMemoryEnrichment(memory.id, { 
+              web_enriched: false, 
+              search_terms: keyTerms 
+            });
+          }
+
+          // Mark as processed
+          await markMemoryProcessed(memory.id);
+          
+        } catch (err) {
+          console.error(`[memory-enrichment] Error processing memory ${memory.id}:`, err);
+        }
       }
     }
 
-    console.log("[memory-enrichment] Enrichment complete");
+    // 2. Check for time-sensitive memories needing refresh
+    const staleMemories = await getMemoriesNeedingRefresh();
+    
+    if (staleMemories.length > 0) {
+      console.log(`[memory-enrichment] Found ${staleMemories.length} memories needing refresh`);
+      
+      for (const memory of staleMemories) {
+        console.log(`[memory-enrichment] Would refresh: ${memory.id}`);
+        // In production: fetch new info from web and update
+      }
+    }
+
+    // 3. Summary
+    const totalMemories = psqlExec("SELECT COUNT(*) FROM memories");
+    console.log(`[memory-enrichment] Enrichment complete. Total memories: ${totalMemories}`);
 
   } catch (err) {
     console.error("[memory-enrichment] Error:", err);

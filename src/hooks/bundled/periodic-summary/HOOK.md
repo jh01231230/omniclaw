@@ -1,6 +1,6 @@
 ---
 name: periodic-summary
-description: "Periodically summarize recent conversations and save to memory (minimal mode only)"
+description: "Periodically summarize recent conversations and save to memory"
 homepage: https://docs.omniclaw.ai/hooks#periodic-summary
 metadata:
   {
@@ -9,8 +9,7 @@ metadata:
         "emoji": "📝",
         "events": ["cron:hourly", "heartbeat"],
         "requires": { 
-          "config": ["agents.defaults.memorySearch.periodicSummary"],
-          "notConfig": ["agents.defaults.memorySearch.deployment=full"]
+          "config": ["agents.defaults.memorySearch.periodicSummary"]
         },
         "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }],
       },

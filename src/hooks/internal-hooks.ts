@@ -8,7 +8,7 @@
 import type { WorkspaceBootstrapFile } from "../agents/workspace.js";
 import type { OmniClawConfig } from "../config/config.js";
 
-export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message";
+export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message" | "cron" | "heartbeat" | "cron:daily" | "cron:hourly";
 
 export type AgentBootstrapHookContext = {
   workspaceDir: string;

@@ -5,6 +5,7 @@ import type { ChannelHeartbeatDeps } from "../channels/plugins/types.js";
 import type { OmniClawConfig } from "../config/config.js";
 import type { AgentDefaultsConfig } from "../config/types.agent-defaults.js";
 import type { OutboundSendDeps } from "./outbound/deliver.js";
+import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
 import {
   resolveAgentConfig,
   resolveAgentWorkspaceDir,
@@ -483,6 +484,24 @@ export async function runHeartbeatOnce(opts: {
   const cfg = opts.cfg ?? loadConfig();
   const agentId = normalizeAgentId(opts.agentId ?? resolveDefaultAgentId(cfg));
   const heartbeat = opts.heartbeat ?? resolveHeartbeatConfig(cfg, agentId);
+  
+  // Trigger internal hooks for heartbeat events FIRST, before any early returns
+  // This ensures hooks run even if heartbeat is skipped
+  const reason = opts.reason || "heartbeat";
+  const isCronWake = reason.startsWith("cron:");
+  const hookEventType: "heartbeat" | "cron:daily" | "cron:hourly" = isCronWake 
+    ? (reason as "heartbeat" | "cron:daily" | "cron:hourly") 
+    : "heartbeat";
+  const hookEvent = createInternalHookEvent(
+    hookEventType,
+    "run",
+    `heartbeat:${agentId}`,
+    { reason, agentId }
+  );
+  void triggerInternalHook(hookEvent).catch((err) => {
+    console.error("[heartbeat] Hook trigger error:", err);
+  });
+
   if (!heartbeatsEnabled) {
     return { status: "skipped", reason: "disabled" };
   }

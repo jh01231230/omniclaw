@@ -43,8 +43,9 @@ Format as a brief journal entry.`;
 
 const summarizeConversations: HookHandler = async (event: InternalHookEvent) => {
   const eventType = event.type as string;
-  // Only run periodically
-  if (eventType !== "cron" && eventType !== "heartbeat") {
+  // Accept cron:hourly, cron:daily, or any cron-* event, plus heartbeat
+  const isCronEvent = eventType === "cron" || eventType.startsWith("cron:");
+  if (!isCronEvent && eventType !== "heartbeat") {
     return;
   }
 
@@ -124,10 +125,12 @@ ${prompt}
 
     console.log("[periodic-summary] Summary saved to:", outputPath);
 
-    // Also store to PostgreSQL if configured
-    const memoryCfg = memorySearch as { store?: { driver?: string } } | undefined;
+    // Store to PostgreSQL in full mode, or if explicitly configured
+    const memoryCfg = memorySearch as { deployment?: string; store?: { driver?: string } } | undefined;
+    const deployment = memoryCfg?.deployment;
     const storeDriver = memoryCfg?.store?.driver;
-    if (storeDriver === "postgresql") {
+    
+    if (deployment === "full" || storeDriver === "postgresql") {
       await storeSummaryToPostgreSQL(summaryEntry, "periodic-summary");
     }
   } catch (err) {

@@ -1,14 +1,14 @@
 ---
 name: session-capture
-description: "Capture conversation messages in real-time to Redis for short-term storage"
+description: "Capture conversation messages to PostgreSQL for long-term memory (full mode)"
 homepage: https://docs.omniclaw.ai/hooks#session-capture
 metadata:
   {
     "omniclaw":
       {
         "emoji": "📡",
-        "events": ["agent"],
-        "requires": { "config": ["agents.defaults.memorySearch.redis"] },
+        "events": ["agent", "heartbeat", "cron", "command"],
+        "requires": { "config": ["agents.defaults.memorySearch.deployment=full"] },
         "install": [{ "id": "bundled", "kind": "bundled", "label": "Bundled with OmniClaw" }],
       },
   }

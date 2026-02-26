@@ -4,6 +4,7 @@ import type { CronEvent, CronServiceState } from "./state.js";
 import { computeJobNextRunAtMs, nextWakeAtMs, resolveJobPayloadTextForMain } from "./jobs.js";
 import { locked } from "./locked.js";
 import { ensureLoaded, persist } from "./store.js";
+import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
@@ -164,6 +165,18 @@ export async function executeJob(
         return;
       }
       state.deps.enqueueSystemEvent(text, { agentId: job.agentId });
+      
+      // Trigger internal hooks for cron jobs
+      const hookEvent = createInternalHookEvent(
+        job.name === "periodic-summary" ? "cron:daily" : job.name === "memory-enrichment" ? "cron:hourly" : "cron",
+        "run",
+        `cron:${job.id}`,
+        { jobId: job.id, jobName: job.name, text }
+      );
+      void triggerInternalHook(hookEvent).catch((err) => {
+        state.deps.log.error({ err: String(err) }, "cron: hook trigger failed");
+      });
+      
       if (job.wakeMode === "now" && state.deps.runHeartbeatOnce) {
         const reason = `cron:${job.id}`;
         const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
