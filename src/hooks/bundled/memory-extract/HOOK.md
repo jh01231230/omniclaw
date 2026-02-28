@@ -35,9 +35,36 @@ The hook extracts memories when:
 
 ## Detail Levels
 
-- **keyframe**: Key decisions, <200 chars
-- **detail**: Full context, <2000 chars
-- **raw**: Raw conversation, important only
+- **core**: Reconstructable keyframe with type-aware strategy
+- **details**: Anchors for names/products/numbers/suggestions/symbols
+- **quote**: Short raw quote for high-fidelity recall
+
+## Output Format (JSONL)
+
+Each line is a structured keyframe record:
+
+- `schema`: `omniclaw.memory.keyframe.v1`
+- `keyframe`: sequence/index, role, content type, strategy, core, details, quote
+- `keyframe.anchors`: names/products, numbers, suggestions, symbols
+- `sessionContext`: session overview/timeline/keyword capsule for replay
+
+Default output path: `~/.omniclaw/memory/extracted-keyframes.jsonl`
+
+## Compression Strategies
+
+The extractor applies different compression strategy per content type:
+
+- **question**: preserves direct question text and `?` tone signals
+- **issue**: keeps error signatures (`TypeError`, `handler.ts:42`, etc.)
+- **task/suggestion**: keeps actionable phrasing and timing details
+- **decision/preference/fact**: keeps rationale, preferences, and concrete data
+
+Each extracted memory stores:
+
+- `core` (primary compressed sentence)
+- `details` (structured detail anchors)
+- `keywords` (terms + symbols + concrete names/numbers)
+- `strategy` + `contentType` metadata
 
 ## Database Schema
 

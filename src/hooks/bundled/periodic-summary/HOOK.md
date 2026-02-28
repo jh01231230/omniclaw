@@ -32,7 +32,7 @@ Add to `omniclaw.json`:
         "periodicSummary": {
           "enabled": true,
           "intervalHours": 24,
-          "outputPath": "~/.omniclaw/memory/summaries.md"
+          "outputPath": "~/.omniclaw/memory/periodic-summary.jsonl"
         }
       }
     }
@@ -47,4 +47,12 @@ Add to `omniclaw.json`:
 
 ## Output
 
-Saves summarized conversations to the configured output path for later LLM processing or direct review.
+Saves a reconstructable summary snapshot (JSONL) to the configured output path.
+
+Each line uses schema `omniclaw.memory.periodic-summary.v1` and includes:
+
+- Core narrative (decisions and progress)
+- Session replay capsules with ordered keyframes
+- Detail anchors (names/products/numbers/suggestions/symbols)
+- Keyword capsule (critical terms and punctuation signals like `?`)
+- Prompt + metadata for deterministic reconstruction
