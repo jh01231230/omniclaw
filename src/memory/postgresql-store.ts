@@ -45,7 +45,9 @@ export class PostgreSQLMemoryStore {
   }
 
   async initialize(): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
     this.initialized = true;
   }
 
@@ -65,11 +67,15 @@ export class PostgreSQLMemoryStore {
   }
 
   private cosineSimilarity(a: number[], b: number[]): number {
-    if (!a.length || !b.length) return 0;
+    if (!a.length || !b.length) {
+      return 0;
+    }
     const dotProduct = a.reduce((sum, val, i) => sum + val * (b[i] || 0), 0);
     const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
     const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-    if (magA === 0 || magB === 0) return 0;
+    if (magA === 0 || magB === 0) {
+      return 0;
+    }
     return dotProduct / (magA * magB);
   }
 
@@ -93,14 +99,18 @@ export class PostgreSQLMemoryStore {
 
       const result = this.runSql(sql);
 
-      if (!result.trim()) return [];
+      if (!result.trim()) {
+        return [];
+      }
 
       // Parse each line as JSON
       const lines = result.trim().split("\n");
       const memories: Array<MemoryEntry & { embStr: string }> = [];
 
       for (const line of lines) {
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
 
         try {
           const parsed = JSON.parse(line);
@@ -114,7 +124,7 @@ export class PostgreSQLMemoryStore {
             createdAt: parsed.created_at ? new Date(parsed.created_at) : undefined,
             embStr: parsed.embedding,
           });
-        } catch (e) {
+        } catch {
           // Skip malformed JSON
           continue;
         }
@@ -130,7 +140,7 @@ export class PostgreSQLMemoryStore {
             if (embMatch) {
               emb = embMatch[1].split(",").map(Number);
             }
-          } catch (e) {}
+          } catch {}
 
           return {
             id: m.id,
@@ -143,7 +153,7 @@ export class PostgreSQLMemoryStore {
             _similarity: this.cosineSimilarity(emb, queryEmbedding),
           };
         })
-        .sort((a, b) => b._similarity - a._similarity)
+        .toSorted((a, b) => b._similarity - a._similarity)
         .slice(0, limit)
         .map(
           (m): MemoryEntry => ({
@@ -179,7 +189,9 @@ export class PostgreSQLMemoryStore {
 
     try {
       const result = this.runSql(sql);
-      if (!result.trim()) return [];
+      if (!result.trim()) {
+        return [];
+      }
 
       const lines = result.trim().split("\n");
       return lines
@@ -197,7 +209,7 @@ export class PostgreSQLMemoryStore {
               createdAt: parsed.created_at ? new Date(parsed.created_at) : undefined,
               updatedAt: parsed.updated_at ? new Date(parsed.updated_at) : undefined,
             };
-          } catch (e) {
+          } catch {
             return null;
           }
         })

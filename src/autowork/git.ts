@@ -7,8 +7,7 @@
  * - Never delete .git directories
  */
 
-import { execSync, exec } from "node:child_process";
-import fs from "node:fs";
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { taskLog } from "./logger.js";
 
@@ -167,7 +166,9 @@ export function getCurrentBranch(cwd?: string): string | null {
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    if (!gitRoot) return null;
+    if (!gitRoot) {
+      return null;
+    }
 
     return execSync("git rev-parse --abbrev-ref HEAD", {
       cwd: gitRoot,
@@ -185,7 +186,9 @@ export function getGitStatus(cwd?: string): { modified: string[]; untracked: str
   try {
     const workDir = cwd || process.cwd();
     const gitRoot = getGitRoot(workDir);
-    if (!gitRoot) return null;
+    if (!gitRoot) {
+      return null;
+    }
 
     const status = execSync("git status --porcelain", { cwd: gitRoot, encoding: "utf-8" });
 
@@ -193,7 +196,9 @@ export function getGitStatus(cwd?: string): { modified: string[]; untracked: str
     const untracked: string[] = [];
 
     for (const line of status.split("\n")) {
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
       const statusCode = line.slice(0, 2);
       const filePath = line.slice(3);
 

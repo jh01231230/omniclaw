@@ -42,7 +42,7 @@ export function createEmbeddedPiSessionEventHandler(ctx: EmbeddedPiSubscribeCont
         handleToolExecutionUpdate(ctx, evt as never);
         return;
       case "tool_execution_end":
-        handleToolExecutionEnd(ctx, evt as never);
+        void handleToolExecutionEnd(ctx, evt as never);
         return;
       case "agent_start":
         handleAgentStart(ctx);

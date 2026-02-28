@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { RedisSessionStore, type SessionMessage } from "./redis-session-store.js";
+import { RedisSessionStore } from "./redis-session-store.js";
 
 export interface ArchiveConfig {
   redisConfig?: {
@@ -149,18 +149,7 @@ export class SessionArchiver {
       const lastMsg = messages[messages.length - 1];
 
       // Escape content for SQL
-      const escapedContent = content.replace(/'/g, "''").replace(/\x00/g, "");
-      const escapedSessionKey = sessionKey.replace(/'/g, "''");
-
-      // Build metadata JSON
-      const metadata = {
-        sessionKey,
-        messageCount: messages.length,
-        firstMessage: firstMsg?.timestamp,
-        lastMessage: lastMsg?.timestamp,
-        archivedAt: new Date().toISOString(),
-      };
-      const escapedMetadata = JSON.stringify(metadata).replace(/'/g, "''");
+      const escapedContent = content.replace(/'/g, "''").replaceAll("\0", "");
 
       // Insert into long_term.memories
       const cmd = [

@@ -1,430 +1,460 @@
-import { execSync, exec } from "node:child_process";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { OmniClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "./prompts.js";
+import { resolveIsNixMode, resolveStateDir } from "../config/paths.js";
+import { runCommandWithTimeout } from "../process/exec.js";
 import { defaultRuntime } from "../runtime.js";
+import { resolveUserPath } from "../utils.js";
 
 export type MemoryDeploymentType = "minimal" | "full";
 
 export interface MemoryDeploymentConfig {
   type: MemoryDeploymentType;
-  enableCredentials?: boolean; // Whether to create credentials partition
-  autoInstall?: boolean; // Auto-install PostgreSQL + Redis
+  enableCredentials?: boolean;
+  autoInstall?: boolean;
+  dataPath?: string;
   postgresql?: {
     host: string;
     port: number;
     database: string;
     user: string;
     password: string;
-    installPath?: string; // Path to PostgreSQL installation
-    dataPath?: string; // Path to data directory
-    autoStart?: boolean; // Auto-start on gateway boot
+    installPath?: string;
+    dataPath?: string;
+    autoStart?: boolean;
   };
-  dataPath?: string; // For minimal: ~/.omniclaw/memory; For full: custom PostgreSQL path
+  redis?: {
+    host: string;
+    port: number;
+    db?: number;
+    sessionPrefix?: string;
+    dataPath?: string;
+  };
 }
 
-/**
- * Detect the platform and return appropriate install info
- */
-function detectPlatform(): { isLinux: boolean; isMac: boolean; isArm: boolean } {
-  const platform = process.platform;
-  const arch = process.arch as string;
+const DEFAULT_FULL_DB_NAME = "omniclaw_memory";
+const DEFAULT_REDIS_SESSION_PREFIX = "session:";
+
+type InstallResult = {
+  postgresql: NonNullable<MemoryDeploymentConfig["postgresql"]>;
+  redis: NonNullable<MemoryDeploymentConfig["redis"]>;
+};
+
+function resolveDefaultMinimalSqlitePath() {
+  const stateDir = resolveStateDir(process.env, os.homedir);
+  return path.join(stateDir, "memory.db");
+}
+
+function resolveDefaultFullRootPath() {
+  const stateDir = resolveStateDir(process.env, os.homedir);
+  return path.join(stateDir, "memory-services");
+}
+
+function defaultPostgresUser() {
+  return process.platform === "darwin" ? os.userInfo().username : "postgres";
+}
+
+async function ensureDir(dirPath: string) {
+  await fs.mkdir(dirPath, { recursive: true });
+}
+
+async function runCommand(params: {
+  argv: string[];
+  timeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
+  allowFailure?: boolean;
+  cwd?: string;
+}): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  const result = await runCommandWithTimeout(params.argv, {
+    timeoutMs: params.timeoutMs ?? 60_000,
+    env: params.env,
+    cwd: params.cwd,
+  });
+  const ok = result.code === 0;
+  if (!ok && !params.allowFailure) {
+    const details = result.stderr.trim() || result.stdout.trim() || "unknown error";
+    throw new Error(details);
+  }
   return {
-    isLinux: platform === "linux",
-    isMac: platform === "darwin",
-    isArm: arch === "arm64" || arch === "aarch64",
+    ok,
+    stdout: result.stdout,
+    stderr: result.stderr,
   };
 }
 
-/**
- * Auto-install PostgreSQL 17 + Redis for full memory mode
- */
+function quotePgIdentifier(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+async function detectPostgresInstallPath(): Promise<string | undefined> {
+  const pgConfig = await runCommand({
+    argv: ["pg_config", "--bindir"],
+    timeoutMs: 10_000,
+    allowFailure: true,
+  });
+  if (!pgConfig.ok) {
+    return undefined;
+  }
+  const bindir = pgConfig.stdout.trim();
+  if (!bindir) {
+    return undefined;
+  }
+  return path.dirname(bindir);
+}
+
+async function detectAptPgvectorPackage(): Promise<string | null> {
+  const result = await runCommand({
+    argv: ["bash", "-lc", "apt-cache search --names-only pgvector"],
+    timeoutMs: 30_000,
+    allowFailure: true,
+  });
+  if (!result.ok) {
+    return null;
+  }
+  const candidates = result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim().split(/\s+/)[0] ?? "")
+    .filter((name) => name.length > 0);
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates[0] ?? null;
+}
+
+async function runPsql(params: {
+  pg: NonNullable<MemoryDeploymentConfig["postgresql"]>;
+  database: string;
+  sql: string;
+  allowFailure?: boolean;
+}) {
+  const pg = params.pg;
+  const env = pg.password
+    ? {
+        ...process.env,
+        PGPASSWORD: pg.password,
+      }
+    : process.env;
+  return await runCommand({
+    argv: [
+      "psql",
+      "-h",
+      pg.host,
+      "-p",
+      String(pg.port),
+      "-U",
+      pg.user,
+      "-d",
+      params.database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      params.sql,
+    ],
+    timeoutMs: 60_000,
+    env,
+    allowFailure: params.allowFailure,
+  });
+}
+
+async function ensureDatabaseAndPgvector(
+  pg: NonNullable<MemoryDeploymentConfig["postgresql"]>,
+  runtime: RuntimeEnv,
+) {
+  const dbName = quotePgIdentifier(pg.database);
+
+  const createDb = await runPsql({
+    pg,
+    database: "postgres",
+    sql: `CREATE DATABASE ${dbName};`,
+    allowFailure: true,
+  });
+  if (!createDb.ok) {
+    const err = createDb.stderr + createDb.stdout;
+    if (!/already exists/i.test(err)) {
+      runtime.log(
+        `[memory] Database create warning: ${createDb.stderr.trim() || createDb.stdout.trim()}`,
+      );
+    }
+  }
+
+  const createVector = await runPsql({
+    pg,
+    database: pg.database,
+    sql: "CREATE EXTENSION IF NOT EXISTS vector;",
+    allowFailure: true,
+  });
+  if (!createVector.ok) {
+    const err = createVector.stderr.trim() || createVector.stdout.trim();
+    throw new Error(
+      [
+        "pgvector extension is not available.",
+        err,
+        "Install pgvector and re-run onboarding, or switch to minimal mode.",
+      ].join("\n"),
+    );
+  }
+}
+
+async function installLinuxMemoryServices(params: {
+  prompter: WizardPrompter;
+  runtime: RuntimeEnv;
+}) {
+  await params.prompter.note(
+    "Installing PostgreSQL + pgvector + Redis (requires sudo).",
+    "Memory Setup",
+  );
+  await runCommand({
+    argv: ["sudo", "apt-get", "update"],
+    timeoutMs: 20 * 60_000,
+  });
+  await runCommand({
+    argv: ["sudo", "apt-get", "install", "-y", "postgresql", "postgresql-contrib", "redis-server"],
+    timeoutMs: 20 * 60_000,
+  });
+
+  const pgvectorPackage = await detectAptPgvectorPackage();
+  if (pgvectorPackage) {
+    await runCommand({
+      argv: ["sudo", "apt-get", "install", "-y", pgvectorPackage],
+      timeoutMs: 20 * 60_000,
+    });
+  } else {
+    params.runtime.log(
+      "[memory] No pgvector apt package detected via apt-cache search; continuing and validating extension availability.",
+    );
+  }
+
+  await runCommand({
+    argv: ["sudo", "systemctl", "enable", "--now", "postgresql"],
+    timeoutMs: 60_000,
+    allowFailure: true,
+  });
+  await runCommand({
+    argv: ["sudo", "systemctl", "enable", "--now", "redis-server"],
+    timeoutMs: 60_000,
+    allowFailure: true,
+  });
+}
+
+async function installMacMemoryServices(params: { prompter: WizardPrompter }) {
+  await params.prompter.note(
+    "Installing PostgreSQL + pgvector + Redis with Homebrew.",
+    "Memory Setup",
+  );
+  await runCommand({
+    argv: ["brew", "install", "postgresql@17", "redis", "pgvector"],
+    timeoutMs: 20 * 60_000,
+  });
+  await runCommand({
+    argv: ["brew", "services", "start", "postgresql@17"],
+    timeoutMs: 60_000,
+    allowFailure: true,
+  });
+  await runCommand({
+    argv: ["brew", "services", "start", "redis"],
+    timeoutMs: 60_000,
+    allowFailure: true,
+  });
+}
+
 export async function autoInstallMemoryServices(
   storagePath: string,
   prompter: WizardPrompter,
   runtime: RuntimeEnv = defaultRuntime,
-): Promise<{
-  postgresql: MemoryDeploymentConfig["postgresql"];
-  redisInstalled: boolean;
-}> {
-  const { isLinux, isMac, isArm } = detectPlatform();
-
-  if (!isLinux && !isMac) {
-    await prompter.note(
-      "Automatic installation is only supported on Linux and macOS. Please install PostgreSQL 17+ and Redis manually.",
-      "Auto-install not supported",
-    );
-    throw new Error("Auto-install not supported on this platform");
+): Promise<InstallResult> {
+  if (resolveIsNixMode(process.env)) {
+    throw new Error("Automatic memory service install is disabled in Nix mode.");
+  }
+  if (process.platform !== "linux" && process.platform !== "darwin") {
+    throw new Error("Automatic installation is only supported on Linux and macOS.");
   }
 
-  const installPath = path.join(storagePath, "postgresql-installed");
-  const dataPath = path.join(storagePath, "postgresql", "data");
-  const redisDataPath = path.join(storagePath, "redis");
+  const resolvedRoot = resolveUserPath(storagePath);
+  const postgresDataPath = path.join(resolvedRoot, "postgresql", "data");
+  const redisDataPath = path.join(resolvedRoot, "redis");
+  await ensureDir(postgresDataPath);
+  await ensureDir(redisDataPath);
 
-  runtime.log(`Auto-installing memory services to: ${storagePath}`);
-
-  // Create directories
-  await prompter.note(`Creating directories at ${storagePath}...`, "Memory Setup");
-  execSync(`mkdir -p "${installPath}" "${dataPath}" "${redisDataPath}"`, { stdio: "pipe" });
-
-  // Check if running on ARM (like NVIDIA Jetson)
-  const isArmBoard = isArm && isLinux;
-
-  if (isLinux) {
-    // Try to install via apt first (faster)
-    try {
-      runtime.log("Attempting PostgreSQL installation via apt...");
-      execSync(
-        "sudo apt-get update && sudo apt-get install -y postgresql-17 postgresql-17-postgis-3 redis-server",
-        {
-          stdio: "inherit",
-        },
-      );
-    } catch {
-      // If apt fails, use the custom installer script
-      runtime.log("apt install failed, using custom installer...");
-      const installerScript = "/home/tars/Workspace/scripts/install_tars_memory.sh";
-
-      if (fs.existsSync(installerScript)) {
-        // Run the installer with custom paths
-        execSync(`bash "${installerScript}"`, {
-          env: {
-            ...process.env,
-            OPTANE_MOUNT: storagePath,
-            POSTGRES_INSTALL: installPath,
-            POSTGRES_DATA: dataPath,
-            REDIS_DATA: redisDataPath,
-          },
-          stdio: "inherit",
-        });
-      } else {
-        // Fall back to basic installation instructions
-        await prompter.note(
-          [
-            `PostgreSQL 17+ is required but not installed.`,
-            isArmBoard
-              ? "For ARM devices (Jetson), please compile PostgreSQL from source."
-              : "Please run:",
-            "",
-            "  # For Ubuntu/Debian:",
-            "  sudo apt install postgresql-17",
-            "  # OR use the TARS Memory installer:",
-            "  bash /home/tars/Workspace/scripts/install_tars_memory.sh",
-            "",
-            `Storage path: ${storagePath}`,
-          ].join("\n"),
-          "PostgreSQL Required",
-        );
-        throw new Error("PostgreSQL not installed");
-      }
-    }
-  } else if (isMac) {
-    // macOS installation
-    try {
-      // Check if Homebrew is available
-      execSync("which brew", { stdio: "pipe" });
-      runtime.log("Installing PostgreSQL and Redis via Homebrew...");
-      execSync("brew install postgresql@17 redis", { stdio: "inherit" });
-
-      // Start services
-      execSync("brew services start postgresql@17", { stdio: "inherit" });
-      execSync("brew services start redis", { stdio: "inherit" });
-    } catch {
-      await prompter.note(
-        [
-          "PostgreSQL 17+ is required but not installed.",
-          "Please install Homebrew and run:",
-          "  brew install postgresql@17 redis",
-          "  brew services start postgresql@17",
-          "  brew services start redis",
-        ].join("\n"),
-        "PostgreSQL Required",
-      );
-      throw new Error("PostgreSQL not installed");
-    }
+  if (process.platform === "linux") {
+    await installLinuxMemoryServices({ prompter, runtime });
+  } else {
+    await installMacMemoryServices({ prompter });
   }
 
-  // Try to start PostgreSQL if not running
-  const pgBinPaths = [
-    "/media/tars/TARS_MEMORY/postgresql-installed/bin",
-    "/usr/lib/postgresql/17/bin",
-    "/usr/local/opt/postgresql@17/bin",
-    "/opt/homebrew/opt/postgresql@17/bin",
-  ];
+  const installPath = await detectPostgresInstallPath();
+  const postgresConfig: NonNullable<MemoryDeploymentConfig["postgresql"]> = {
+    host: process.platform === "linux" ? "/var/run/postgresql" : "127.0.0.1",
+    port: 5432,
+    database: DEFAULT_FULL_DB_NAME,
+    user: process.platform === "linux" ? os.userInfo().username : defaultPostgresUser(),
+    password: "",
+    installPath,
+    dataPath: postgresDataPath,
+    autoStart: true,
+  };
+  const redisConfig: NonNullable<MemoryDeploymentConfig["redis"]> = {
+    host: "127.0.0.1",
+    port: 6379,
+    db: 0,
+    sessionPrefix: DEFAULT_REDIS_SESSION_PREFIX,
+    dataPath: redisDataPath,
+  };
 
-  let psqlPath = "";
-  for (const p of pgBinPaths) {
-    if (fs.existsSync(path.join(p, "psql"))) {
-      psqlPath = p;
-      break;
-    }
+  if (process.platform === "linux") {
+    const user = os.userInfo().username;
+    await runCommand({
+      argv: ["sudo", "-u", "postgres", "createuser", "--superuser", user],
+      timeoutMs: 60_000,
+      allowFailure: true,
+    });
+    await runCommand({
+      argv: ["sudo", "-u", "postgres", "createdb", "--owner", user, DEFAULT_FULL_DB_NAME],
+      timeoutMs: 60_000,
+      allowFailure: true,
+    });
   }
 
-  // Try to start PostgreSQL
-  if (psqlPath) {
-    try {
-      const pgCtl = path.join(psqlPath, "pg_ctl");
-      if (fs.existsSync(pgCtl)) {
-        execSync(`"${pgCtl}" -D "${dataPath}" status || "${pgCtl}" -D "${dataPath}" start -w`, {
-          stdio: "pipe",
-        });
-      }
-    } catch {
-      runtime.log("PostgreSQL may already be running or could not be started");
-    }
-  }
-
-  // Check if Redis is available
-  let redisInstalled = false;
-  try {
-    execSync("redis-cli ping", { stdio: "pipe" });
-    redisInstalled = true;
-  } catch {
-    // Try to start redis
-    try {
-      execSync("redis-server --daemonize yes", { stdio: "pipe" });
-      redisInstalled = true;
-    } catch {
-      runtime.log("Redis could not be started");
-    }
-  }
+  await ensureDatabaseAndPgvector(postgresConfig, runtime);
 
   return {
-    postgresql: {
-      host: "localhost",
-      port: 5432,
-      database: "long_term_db",
-      user: isMac ? os.userInfo().username : "postgres",
-      password: "",
-      installPath,
-      dataPath,
-      autoStart: true,
-    },
-    redisInstalled,
+    postgresql: postgresConfig,
+    redis: redisConfig,
   };
 }
 
-/**
- * Initialize credentials table in PostgreSQL
- */
 export async function initializeCredentialsPartition(
-  pgConfig: { host: string; port: number; database: string; user: string; password?: string },
+  pgConfig: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password?: string;
+  },
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
-  const { host, port, database, user, password } = pgConfig;
+  const sql = [
+    "CREATE SCHEMA IF NOT EXISTS credentials;",
+    "CREATE TABLE IF NOT EXISTS credentials.secrets (",
+    "  id SERIAL PRIMARY KEY,",
+    "  key TEXT UNIQUE NOT NULL,",
+    "  value_encrypted TEXT NOT NULL,",
+    "  created_at TIMESTAMPTZ DEFAULT now()",
+    ");",
+  ].join(" ");
 
-  const env = { ...process.env, PGPASSWORD: password || "" };
-
-  try {
-    // Create credentials table
-    const createTableSQL = `
-CREATE TABLE IF NOT EXISTS credentials (
-    id SERIAL PRIMARY KEY,
-    category TEXT NOT NULL,
-    service TEXT NOT NULL,
-    username TEXT,
-    encrypted_data TEXT NOT NULL DEFAULT '',
-    extra JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    notes TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_credentials_category ON credentials(category);
-CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_credentials_unique ON credentials(category, service);
-`.replace(/\n/g, " ");
-
-    execSync(
-      `psql -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "${createTableSQL}"`,
-      { env, stdio: "pipe" },
+  const result = await runPsql({
+    pg: {
+      host: pgConfig.host,
+      port: pgConfig.port,
+      database: pgConfig.database,
+      user: pgConfig.user,
+      password: pgConfig.password ?? "",
+    },
+    database: pgConfig.database,
+    sql,
+    allowFailure: true,
+  });
+  if (!result.ok) {
+    runtime.error(
+      `[memory] Failed to initialize credentials partition: ${
+        result.stderr.trim() || result.stdout.trim()
+      }`,
     );
-
-    runtime.log(`Credentials partition created in ${database}`);
-    return true;
-  } catch (error) {
-    runtime.error(`Failed to create credentials partition: ${error}`);
     return false;
   }
+  return true;
 }
 
-/**
- * Prompt user to set up credentials storage
- */
 export async function promptCredentialsSetup(
   prompter: WizardPrompter,
-  runtime: RuntimeEnv = defaultRuntime,
+  _runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
-  const setup = await prompter.confirm({
-    message: "Create secure credentials partition?",
-
-    initialValue: true,
+  return await prompter.confirm({
+    message: "Create credentials table in PostgreSQL?",
+    initialValue: false,
   });
-
-  if (setup) {
-    await prompter.note(
-      [
-        "Credentials will be stored encrypted in the PostgreSQL database.",
-        "",
-        "Use the credentials CLI to manage:",
-        "  ./tars-credentials.sh add <category> <service> <data>",
-        "",
-        "Categories: email, server, website, api, etc.",
-      ].join("\n"),
-      "Credentials",
-    );
-  }
-
-  return setup;
 }
 
-/**
- * Initialize full memory schema with TARS Memory design
- * Uses schemas: long_term, metadata, credentials
- * Requires pgvector extension to be installed
- */
 export async function initializeMemorySchema(
   pgConfig: { host: string; port: number; database: string; user: string; password?: string },
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
-  const { host, port, database, user, password } = pgConfig;
-  const env = { ...process.env, PGPASSWORD: password || "" };
-
   try {
-    const schemaSQL = `
--- Create schemas
-CREATE SCHEMA IF NOT EXISTS long_term;
-CREATE SCHEMA IF NOT EXISTS metadata;
-CREATE SCHEMA IF NOT EXISTS credentials;
-
--- Enable vector extension
-DO $$ BEGIN CREATE EXTENSION IF NOT EXISTS vector; EXCEPTION WHEN duplicate_object THEN null; END
-$$;
-
--- long_term schema: 长期记忆
-CREATE TABLE IF NOT EXISTS long_term.memories (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    content TEXT NOT NULL,
-    embedding vector(1536),
-    importance INTEGER DEFAULT 0,
-    detail_level INTEGER DEFAULT 1,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    last_accessed TIMESTAMPTZ DEFAULT now(),
-    access_count INTEGER DEFAULT 0,
-    needs_embedding BOOLEAN DEFAULT true
-);
-
-CREATE INDEX IF NOT EXISTS idx_memories_created_at ON long_term.memories(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_memories_importance ON long_term.memories(importance DESC);
-CREATE INDEX IF NOT EXISTS idx_memories_embedding ON long_term.memories USING ivfflat(embedding vector_cosine_ops) WITH (lists=100);
-CREATE INDEX IF NOT EXISTS idx_memories_detail_level ON long_term.memories(detail_level);
-
--- metadata schema: 元数据
-CREATE TABLE IF NOT EXISTS metadata.tags (
-    id SERIAL PRIMARY KEY,
-    memory_id UUID REFERENCES long_term.memories(id) ON DELETE CASCADE,
-    tag TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_tags_memory_id ON metadata.tags(memory_id);
-CREATE INDEX IF NOT EXISTS idx_tags_tag ON metadata.tags(tag);
-
-CREATE TABLE IF NOT EXISTS metadata.access_log (
-    id SERIAL PRIMARY KEY,
-    memory_id UUID REFERENCES long_term.memories(id) ON DELETE CASCADE,
-    accessed_at TIMESTAMPTZ DEFAULT now(),
-    session_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_access_log_memory_id ON metadata.access_log(memory_id);
-CREATE INDEX IF NOT EXISTS idx_access_log_accessed_at ON metadata.access_log(accessed_at DESC);
-
--- credentials schema: 安全数据
-CREATE TABLE IF NOT EXISTS credentials.secrets (
-    id SERIAL PRIMARY KEY,
-    key TEXT UNIQUE NOT NULL,
-    value_encrypted TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-`.replace(/\n/g, " ");
-
-    execSync(`psql -h "${host}" -p "${port}" -U "${user}" -d "${database}" -c "${schemaSQL}"`, {
-      env,
-      stdio: "pipe",
-    });
-
-    runtime.log(`Memory schema initialized in ${database}`);
+    await ensureDatabaseAndPgvector(
+      {
+        host: pgConfig.host,
+        port: pgConfig.port,
+        database: pgConfig.database,
+        user: pgConfig.user,
+        password: pgConfig.password ?? "",
+      },
+      runtime,
+    );
     return true;
   } catch (error) {
-    runtime.error(`Failed to initialize memory schema: ${error}`);
-    runtime.log(
-      `Warning: If pgvector is not installed, run: cd /tmp && git clone --depth 1 https://github.com/pgvector/pgvector.git && cd pgvector && make PG_CONFIG=/path/to/pg_config && sudo make install`,
-    );
+    runtime.error(`[memory] Failed to initialize memory schema: ${String(error)}`);
     return false;
   }
 }
 
-/**
- * Check if PostgreSQL is installed and meets minimum version requirement (17+)
- */
 export async function checkPostgreSQLInstallation(): Promise<{
   installed: boolean;
   version?: string;
   versionNumber?: number;
   error?: string;
 }> {
-  try {
-    const result = execSync("psql --version", { encoding: "utf-8" });
-    const match = result.match(/psql \(PostgreSQL\) (\d+)\./);
-    if (match) {
-      const versionNumber = parseInt(match[1], 10);
-      return {
-        installed: true,
-        version: result.trim(),
-        versionNumber,
-      };
-    }
-    return { installed: false, error: "Could not parse version" };
-  } catch {
-    return { installed: false, error: "PostgreSQL not found" };
+  const result = await runCommand({
+    argv: ["psql", "--version"],
+    timeoutMs: 10_000,
+    allowFailure: true,
+  });
+  if (!result.ok) {
+    return { installed: false, error: result.stderr.trim() || "psql not found" };
   }
+  const output = result.stdout.trim();
+  const match = output.match(/(\d+)\./);
+  const versionNumber = match?.[1] ? Number.parseInt(match[1], 10) : undefined;
+  return {
+    installed: true,
+    version: output,
+    versionNumber,
+  };
 }
 
-/**
- * Prompt user to install PostgreSQL if not present
- */
 export async function ensurePostgreSQL(
   prompter: WizardPrompter,
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<boolean> {
-  const pgCheck = await checkPostgreSQLInstallation();
-
-  if (pgCheck.installed && pgCheck.versionNumber && pgCheck.versionNumber >= 17) {
-    await prompter.note(`PostgreSQL ${pgCheck.version} found.`, "PostgreSQL");
+  const pg = await checkPostgreSQLInstallation();
+  if (pg.installed) {
+    await prompter.note(`Detected ${pg.version ?? "PostgreSQL"}.`, "PostgreSQL");
     return true;
   }
-
   await prompter.note(
     [
-      "PostgreSQL 17+ is required for full memory deployment.",
+      "PostgreSQL is not installed.",
+      "Install PostgreSQL + pgvector + Redis, or choose minimal mode.",
       "",
-      "Installation options:",
-      "1. Ubuntu/Debian: sudo apt install postgresql-17",
-      "2. Use the TARS Memory installer:",
-      "   bash /home/tars/Workspace/scripts/install_tars_memory.sh",
-      "3. Or compile from source:",
-      "   https://www.postgresql.org/download/",
+      "Linux:",
+      "  sudo apt-get update",
+      "  sudo apt-get install -y postgresql postgresql-contrib redis-server",
+      "",
+      "macOS:",
+      "  brew install postgresql@17 redis pgvector",
     ].join("\n"),
-    "PostgreSQL Required",
+    "PostgreSQL required",
   );
-
-  const install = await prompter.confirm({
-    message: "Have you installed PostgreSQL 17+? Continue?",
+  const proceed = await prompter.confirm({
+    message: "Continue with full mode after manual installation?",
     initialValue: false,
   });
-
-  return install;
+  if (!proceed) {
+    runtime.log("[memory] Falling back to minimal mode.");
+  }
+  return proceed;
 }
 
 export interface PromptMemoryDeploymentOptions {
@@ -438,168 +468,102 @@ export async function promptMemoryDeployment(
   runtime: RuntimeEnv,
   options?: PromptMemoryDeploymentOptions,
 ): Promise<MemoryDeploymentConfig> {
-  // Use provided options in non-interactive mode
-  let type: MemoryDeploymentType = "minimal";
-
-  if (options?.memoryMode) {
-    type = options.memoryMode;
-  } else {
-    type = (await prompter.select({
+  const memoryType =
+    options?.memoryMode ??
+    ((await prompter.select({
       message: "Choose memory deployment type",
       options: [
         {
           value: "minimal",
-          label: "Minimal (SQLite)",
-          hint: "Lightweight file-based storage. Memory files in ~/.omniclaw/memory",
+          label: "Minimal (default)",
+          hint: "SQLite-backed memory index in ~/.omniclaw",
         },
         {
           value: "full",
-          label: "Full (PostgreSQL)",
-          hint: "Full-featured vector database with embedding search. Requires PostgreSQL 17+",
+          label: "Full (PostgreSQL + pgvector + Redis)",
+          hint: "Long-term + short-term memory services with semantic search",
         },
       ],
       initialValue: "minimal",
-    })) as MemoryDeploymentType;
+    })) as MemoryDeploymentType);
+
+  if (memoryType === "minimal") {
+    return {
+      type: "minimal",
+      dataPath: resolveDefaultMinimalSqlitePath(),
+      autoInstall: false,
+    };
   }
 
-  const config: MemoryDeploymentConfig = {
-    type,
-    autoInstall: options?.autoInstall,
+  const fullRoot =
+    options?.memoryPath ??
+    (await prompter.text({
+      message: "Memory deployment directory",
+      initialValue: resolveDefaultFullRootPath(),
+      validate: (value) => (value.trim().length > 0 ? undefined : "Path is required."),
+    }));
+  const deploymentRoot = resolveUserPath(fullRoot);
+  const autoInstall =
+    options?.autoInstall ??
+    (await prompter.confirm({
+      message: "Install PostgreSQL + pgvector + Redis now?",
+      initialValue: true,
+    }));
+
+  const defaultPostgres: NonNullable<MemoryDeploymentConfig["postgresql"]> = {
+    host: process.platform === "linux" ? "/var/run/postgresql" : "127.0.0.1",
+    port: 5432,
+    database: DEFAULT_FULL_DB_NAME,
+    user: process.platform === "linux" ? os.userInfo().username : defaultPostgresUser(),
+    password: "",
+    dataPath: path.join(deploymentRoot, "postgresql", "data"),
+    autoStart: true,
+  };
+  const defaultRedis: NonNullable<MemoryDeploymentConfig["redis"]> = {
+    host: "127.0.0.1",
+    port: 6379,
+    db: 0,
+    sessionPrefix: DEFAULT_REDIS_SESSION_PREFIX,
+    dataPath: path.join(deploymentRoot, "redis"),
   };
 
-  // For full deployment, check PostgreSQL installation
-  if (type === "full") {
-    // Auto-install if requested
-    if (options?.autoInstall && options?.memoryPath) {
-      try {
-        await prompter.note("Auto-installing PostgreSQL and Redis...", "Memory Setup");
-        const installResult = await autoInstallMemoryServices(
-          options.memoryPath,
-          prompter,
-          runtime,
-        );
-        config.postgresql = installResult.postgresql;
+  const config: MemoryDeploymentConfig = {
+    type: "full",
+    dataPath: deploymentRoot,
+    autoInstall,
+    postgresql: defaultPostgres,
+    redis: defaultRedis,
+  };
 
-        // Create database if needed
-        if (installResult.postgresql) {
-          // TODO: Re-enable when infra/postgres.js is implemented
-          // const { createDatabase } = await import("../infra/postgres.js");
-          // await createDatabase(
-          //   installResult.postgresql.database,
-          //   installResult.postgresql.user,
-          //   runtime,
-          // );
-          runtime.log("Database creation skipped - infra/postgres.js not implemented");
-        }
-      } catch (err) {
-        runtime.error(`Auto-install failed: ${err}`);
-        await prompter.note(
-          "Auto-install failed. Please install manually or use minimal mode.",
-          "Memory Setup",
-        );
-        config.type = "minimal";
-      }
-    } else {
-      const pgReady = await ensurePostgreSQL(prompter, runtime);
-      if (!pgReady) {
-        // Fall back to minimal if PostgreSQL not available
-        await prompter.note("Falling back to minimal memory deployment.", "PostgreSQL");
-        config.type = "minimal";
-      }
-    }
-  }
-
-  if (config.type === "full" && config.postgresql) {
-    // For full deployment, prompt for PostgreSQL configuration
-    const useDefault = await prompter.confirm({
-      message: "Use default PostgreSQL at localhost:5432?",
-      initialValue: true,
-    });
-
-    if (!useDefault) {
-      const host = await prompter.text({
-        message: "PostgreSQL host",
-        initialValue: "localhost",
-      });
-      const port = await prompter.text({
-        message: "PostgreSQL port",
-        initialValue: "5432",
-      });
-      const database = await prompter.text({
-        message: "Database name",
-        initialValue: "long_term_db",
-      });
-      const user = await prompter.text({
-        message: "Database user",
-        initialValue: "postgres",
-      });
-      const password = await prompter.text({
-        message: "Database password",
-      });
-
-      config.postgresql = {
-        host,
-        port: parseInt(port, 10),
-        database,
-        user,
-        password,
-      };
-    } else {
-      // Default PostgreSQL config
-      config.postgresql = {
-        host: "localhost",
-        port: 5432,
-        database: "long_term_db",
-        user: "postgres",
-        password: "",
-        installPath: "/media/tars/TARS_MEMORY/postgresql-installed",
-        dataPath: "/media/tars/TARS_MEMORY/postgresql/data",
-        autoStart: true,
-      };
-    }
-
-    // Prompt for PostgreSQL paths and auto-start
-    if (config.postgresql) {
-      const installPath = await prompter.text({
-        message: "PostgreSQL installation path",
-        initialValue:
-          config.postgresql.installPath || "/media/tars/TARS_MEMORY/postgresql-installed",
-      });
-      const dataPath = await prompter.text({
-        message: "PostgreSQL data directory path",
-        initialValue: config.postgresql.dataPath || "/media/tars/TARS_MEMORY/postgresql/data",
-      });
-      const autoStart = await prompter.confirm({
-        message: "Auto-start PostgreSQL on gateway boot?",
-        initialValue: true,
-      });
-
-      config.postgresql.installPath = installPath;
-      config.postgresql.dataPath = dataPath;
-      config.postgresql.autoStart = autoStart;
-    }
-
-    // Prompt for credentials partition
-    config.enableCredentials = await promptCredentialsSetup(prompter, runtime);
-
-    // Initialize full memory schema (long_term_memory, etc.)
-    // This requires PostgreSQL to be running and pgvector installed
+  if (autoInstall) {
     try {
-      await initializeMemorySchema(
-        {
-          host: config.postgresql.host,
-          port: config.postgresql.port,
-          database: config.postgresql.database,
-          user: config.postgresql.user,
-          password: config.postgresql.password,
-        },
-        runtime,
+      const install = await autoInstallMemoryServices(deploymentRoot, prompter, runtime);
+      config.postgresql = install.postgresql;
+      config.redis = install.redis;
+    } catch (error) {
+      runtime.error(`[memory] Auto-install failed: ${String(error)}`);
+      await prompter.note(
+        "Full mode setup failed; falling back to minimal mode. You can reconfigure memory later.",
+        "Memory Setup",
       );
-    } catch (err) {
-      runtime.log(`Warning: Memory schema initialization skipped: ${err}`);
+      return {
+        type: "minimal",
+        dataPath: resolveDefaultMinimalSqlitePath(),
+        autoInstall: false,
+      };
+    }
+  } else {
+    const pgReady = await ensurePostgreSQL(prompter, runtime);
+    if (!pgReady) {
+      return {
+        type: "minimal",
+        dataPath: resolveDefaultMinimalSqlitePath(),
+        autoInstall: false,
+      };
     }
   }
 
+  config.enableCredentials = await promptCredentialsSetup(prompter, runtime);
   return config;
 }
 
@@ -612,20 +576,21 @@ export function applyMemoryDeploymentConfig(
   };
 
   if (memoryConfig.type === "minimal") {
-    // Minimal: Use SQLite with memory files in ~/.omniclaw/memory
+    const sqlitePath =
+      memoryConfig.dataPath && memoryConfig.dataPath.endsWith(".db")
+        ? resolveUserPath(memoryConfig.dataPath)
+        : resolveDefaultMinimalSqlitePath();
     memorySettings.store = {
       driver: "sqlite",
-      path: "~/.omniclaw/memory.db",
+      path: sqlitePath,
     };
-    // Minimal also gets basic sync
     memorySettings.sync = {
       onSessionStart: true,
       onSearch: true,
       watch: false,
       intervalMinutes: 60,
     };
-  } else if (memoryConfig.type === "full" && memoryConfig.postgresql) {
-    // Full: Use PostgreSQL
+  } else if (memoryConfig.type === "full" && memoryConfig.postgresql && memoryConfig.redis) {
     memorySettings.store = {
       driver: "postgresql",
       host: memoryConfig.postgresql.host,
@@ -633,39 +598,35 @@ export function applyMemoryDeploymentConfig(
       database: memoryConfig.postgresql.database,
       user: memoryConfig.postgresql.user,
       password: memoryConfig.postgresql.password,
+      vector: {
+        enabled: true,
+      },
     };
-
-    // Store PostgreSQL management settings
-    if (
-      memoryConfig.postgresql.installPath ||
-      memoryConfig.postgresql.dataPath ||
-      memoryConfig.postgresql.autoStart !== undefined
-    ) {
-      memorySettings.postgresql = {
-        installPath: memoryConfig.postgresql.installPath,
-        dataPath: memoryConfig.postgresql.dataPath,
-        autoStart: memoryConfig.postgresql.autoStart,
-      };
-    }
-
-    // Store credentials flag in config
-    if (memoryConfig.enableCredentials !== undefined) {
-      memorySettings.enableCredentials = memoryConfig.enableCredentials;
-    }
-
-    // Add periodic summary for full deployment
+    memorySettings.postgresql = {
+      installPath: memoryConfig.postgresql.installPath,
+      dataPath: memoryConfig.postgresql.dataPath,
+      port: memoryConfig.postgresql.port,
+      autoStart: memoryConfig.postgresql.autoStart,
+    };
+    memorySettings.redis = {
+      host: memoryConfig.redis.host,
+      port: memoryConfig.redis.port,
+      db: memoryConfig.redis.db,
+      sessionPrefix: memoryConfig.redis.sessionPrefix,
+    };
+    memorySettings.experimental = {
+      sessionMemory: true,
+    };
     memorySettings.sync = {
       onSessionStart: true,
       onSearch: true,
       watch: false,
       intervalMinutes: 30,
     };
+  }
 
-    memorySettings.periodicSummary = {
-      enabled: true,
-      intervalHours: 24,
-      outputPath: "~/.omniclaw/memory/periodic-summaries.md",
-    };
+  if (memoryConfig.enableCredentials !== undefined) {
+    memorySettings.enableCredentials = memoryConfig.enableCredentials;
   }
 
   const agents = baseConfig.agents ?? {};

@@ -62,7 +62,7 @@ const intentTrackerHandler: HookHandler = async (event) => {
   }
 
   // Extract message from context
-  const ctx = event.context as Record<string, unknown>;
+  const ctx = event.context;
   const message = ctx.message as string | undefined;
   const isUser = ctx.isUser as boolean | undefined;
 

@@ -385,6 +385,6 @@ export const dispatchTelegramMessage = async ({
       `${new Date().toISOString()} triggered agent event\n`,
     );
   } catch (err) {
-    logVerbose(`[session-capture] Failed to trigger agent hook: ${err}`);
+    logVerbose(`[session-capture] Failed to trigger agent hook: ${String(err)}`);
   }
 };

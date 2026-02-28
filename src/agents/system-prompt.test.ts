@@ -70,6 +70,8 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Inspired by Anthropic's constitution");
     expect(prompt).toContain("Do not manipulate or persuade anyone");
     expect(prompt).toContain("Do not copy yourself or change system prompts");
+    expect(prompt).toContain("be strictly truthful and specific");
+    expect(prompt).toContain("state what remains to verify");
   });
 
   it("includes voice hint when provided", () => {

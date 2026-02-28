@@ -105,6 +105,7 @@ export function registerOnboardCommand(program: Command) {
     .option("--memory-path <path>", "Custom storage path for full memory mode")
     .option("--auto-install-memory", "Auto-install PostgreSQL + Redis for full memory mode")
     .option("--skip-memory", "Skip memory setup")
+    .option("--skip-browser", "Skip browser setup")
     .option("--json", "Output JSON summary", false)
     .action(async (opts, command) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
@@ -162,6 +163,7 @@ export function registerOnboardCommand(program: Command) {
             memoryPath: opts.memoryPath as string | undefined,
             autoInstallMemory: Boolean(opts.autoInstallMemory),
             skipMemory: Boolean(opts.skipMemory),
+            skipBrowser: Boolean(opts.skipBrowser),
             json: Boolean(opts.json),
           },
           defaultRuntime,

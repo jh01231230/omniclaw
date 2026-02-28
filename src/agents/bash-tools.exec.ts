@@ -1105,10 +1105,13 @@ export function createExecTool(
           "sudo password is not configured. Run `omniclaw onboard` and set tools.sudo.auth=password.",
         );
       }
-      const sudoRuntime =
-        shouldUseSudo && !sandbox
-          ? { auth: sudoAuth as "password" | "nopasswd", password: sudoPassword }
-          : undefined;
+      const sudoRuntime:
+        | {
+            auth: "password" | "nopasswd";
+            password?: string;
+          }
+        | undefined =
+        shouldUseSudo && !sandbox ? { auth: sudoAuth, password: sudoPassword } : undefined;
 
       if (host === "node") {
         const approvals = resolveExecApprovals(agentId, { security, ask });

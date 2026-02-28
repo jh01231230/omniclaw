@@ -1,9 +1,15 @@
+import os from "node:os";
+import path from "node:path";
 import type { OmniClawConfig } from "../../config/config.js";
 import type { RuntimeEnv } from "../../runtime.js";
+import type { WizardPrompter } from "../../wizard/prompts.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
+import { resolveStateDir } from "../../config/paths.js";
+import { resolveUserPath } from "../../utils.js";
+import { applyBrowserConfig, promptBrowserSetup } from "../../wizard/onboarding.browser.js";
 import {
   applyMemoryDeploymentConfig,
   autoInstallMemoryServices,
@@ -26,6 +32,34 @@ import { logNonInteractiveOnboardingJson } from "./local/output.js";
 import { applyNonInteractiveSkillsConfig } from "./local/skills-config.js";
 import { resolveNonInteractiveWorkspaceDir } from "./local/workspace.js";
 import { applyNonInteractiveSandboxDefaults } from "./sandbox-defaults.js";
+
+function createNonInteractivePrompter(runtime: RuntimeEnv): WizardPrompter {
+  return {
+    intro: async () => {},
+    outro: async () => {},
+    note: async (message: string, title?: string) => {
+      runtime.log(title ? `${title}: ${message}` : message);
+    },
+    select: async <T>(params: { options: Array<{ value: T }>; initialValue?: T }): Promise<T> => {
+      if (params.initialValue !== undefined) {
+        return params.initialValue;
+      }
+      const first = params.options[0];
+      if (first) {
+        return first.value;
+      }
+      throw new Error("Non-interactive select has no options.");
+    },
+    multiselect: async <T>(): Promise<T[]> => [],
+    text: async (params: { initialValue?: string }): Promise<string> => params.initialValue ?? "",
+    confirm: async (params: { initialValue?: boolean }): Promise<boolean> =>
+      params.initialValue ?? true,
+    progress: () => ({
+      update: () => {},
+      stop: () => {},
+    }),
+  };
+}
 
 export async function runNonInteractiveOnboardingLocal(params: {
   opts: OnboardOptions;
@@ -88,35 +122,51 @@ export async function runNonInteractiveOnboardingLocal(params: {
   // Setup memory deployment (minimal vs full PostgreSQL)
   if (!opts.skipMemory) {
     const memoryMode = opts.memoryMode ?? "minimal";
-    const memoryConfig: MemoryDeploymentConfig = { type: memoryMode };
+    const defaultMemoryRoot = path.join(
+      resolveStateDir(process.env, os.homedir),
+      "memory-services",
+    );
+    const memoryRootPath = resolveUserPath(opts.memoryPath ?? defaultMemoryRoot);
+    const memoryConfig: MemoryDeploymentConfig = {
+      type: memoryMode,
+      autoInstall: Boolean(opts.autoInstallMemory),
+      dataPath: memoryMode === "full" ? memoryRootPath : undefined,
+    };
 
     if (memoryMode === "full") {
-      if (opts.autoInstallMemory && opts.memoryPath) {
+      if (opts.autoInstallMemory) {
         // Auto-install memory services
         try {
-          runtime.log(`Auto-installing memory services to: ${opts.memoryPath}`);
+          runtime.log(`Auto-installing memory services to: ${memoryRootPath}`);
           const installResult = await autoInstallMemoryServices(
-            opts.memoryPath,
-            { confirm: async () => true, note: async () => {} } as any,
+            memoryRootPath,
+            createNonInteractivePrompter(runtime),
             runtime,
           );
           memoryConfig.postgresql = installResult.postgresql;
+          memoryConfig.redis = installResult.redis;
           memoryConfig.autoInstall = true;
         } catch (err) {
-          runtime.error(`Auto-install failed: ${err}, falling back to minimal mode`);
+          runtime.error(`Auto-install failed: ${String(err)}, falling back to minimal mode`);
           memoryConfig.type = "minimal";
         }
       } else {
         // Use default PostgreSQL config
         memoryConfig.postgresql = {
-          host: "localhost",
+          host: process.platform === "linux" ? "/var/run/postgresql" : "127.0.0.1",
           port: 5432,
-          database: "openclaw_memory",
-          user: "postgres",
+          database: "omniclaw_memory",
+          user: process.platform === "linux" ? os.userInfo().username : "postgres",
           password: "",
-          installPath: "/media/tars/TARS_MEMORY/postgresql-installed",
-          dataPath: "/media/tars/TARS_MEMORY/postgresql/data",
+          dataPath: path.join(memoryRootPath, "postgresql", "data"),
           autoStart: true,
+        };
+        memoryConfig.redis = {
+          host: "127.0.0.1",
+          port: 6379,
+          db: 0,
+          sessionPrefix: "session:",
+          dataPath: path.join(memoryRootPath, "redis"),
         };
       }
     }
@@ -127,6 +177,15 @@ export async function runNonInteractiveOnboardingLocal(params: {
     if (memoryConfig.type === "minimal") {
       await ensureMemoryDir(runtime);
     }
+  }
+
+  if (!opts.skipBrowser) {
+    const browserConfig = await promptBrowserSetup(createNonInteractivePrompter(runtime), runtime, {
+      enabled: true,
+      nonInteractive: true,
+      autoInstallChromium: true,
+    });
+    nextConfig = applyBrowserConfig(nextConfig, browserConfig);
   }
 
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });

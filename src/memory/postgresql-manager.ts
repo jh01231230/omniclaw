@@ -34,7 +34,9 @@ export function detectPostgreSQL(): { found: boolean; path?: string; version?: s
   ];
 
   for (const p of [...possiblePaths, ...commonPaths]) {
-    if (!p) continue;
+    if (!p) {
+      continue;
+    }
     try {
       if (fs.existsSync(p)) {
         const version = execSync(`${path.dirname(p)}/psql --version`, { encoding: "utf-8" }).trim();
@@ -60,9 +62,6 @@ export function detectPostgreSQL(): { found: boolean; path?: string; version?: s
 export function startPostgreSQL(config: PostgreSQLConfig): { success: boolean; error?: string } {
   const installPath = config.installPath || "/media/tars/TARS_MEMORY/postgresql-installed";
   const dataPath = config.dataPath || "/media/tars/TARS_MEMORY/postgresql/data";
-  const port = config.port || 5432;
-
-  const pgBin = path.join(installPath, "bin", "postgres");
   const pg_ctl = path.join(installPath, "bin", "pg_ctl");
 
   // Check if already running
@@ -123,7 +122,6 @@ export function stopPostgreSQL(config: PostgreSQLConfig): { success: boolean; er
 export function checkPostgreSQLStatus(config: PostgreSQLConfig): PostgreSQLStatus {
   const installPath = config.installPath || "/media/tars/TARS_MEMORY/postgresql-installed";
   const dataPath = config.dataPath || "/media/tars/TARS_MEMORY/postgresql/data";
-  const port = config.port || 5432;
 
   const pg_ctl = path.join(installPath, "bin", "pg_ctl");
 

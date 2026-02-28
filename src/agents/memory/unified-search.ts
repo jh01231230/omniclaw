@@ -1,14 +1,12 @@
 /**
  * Unified Memory Search Module
- * 
+ *
  * Searches both Redis (recent) and PostgreSQL (long-term)
  * for comprehensive memory retrieval.
  */
 
-import { randomUUID } from "node:crypto";
 import { execSync } from "child_process";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { randomUUID } from "node:crypto";
 
 const PSQL_PATH = "/media/tars/TARS_MEMORY/postgresql-installed/bin/psql";
 const REDIS_CLI = "redis-cli";
@@ -31,6 +29,25 @@ export interface UnifiedSearchOptions {
   minRelevance?: number;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function parseJsonArray(input: string): unknown[] {
+  const parsed = JSON.parse(input) as unknown;
+  return Array.isArray(parsed) ? parsed : [];
+}
+
 /**
  * Search PostgreSQL memories using vector similarity
  */
@@ -49,22 +66,25 @@ async function searchPostgreSQL(query: string, limit = 10): Promise<MemoryResult
           ORDER BY importance DESC, created_at DESC
           LIMIT ${limit}
         ) t"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     ).trim();
 
     if (!resultsJson || resultsJson === "" || resultsJson === "null") {
       return [];
     }
 
-    const rows = JSON.parse(resultsJson);
-    return rows.map((row: any) => ({
-      id: row.id,
-      content: row.content,
-      source: "postgresql" as const,
-      relevance: row.relevance || 0.5,
-      timestamp: row.timestamp,
-      metadata: row.metadata
-    }));
+    const rows = parseJsonArray(resultsJson);
+    return rows.map((row): MemoryResult => {
+      const record = asRecord(row) ?? {};
+      return {
+        id: asString(record.id, randomUUID()),
+        content: asString(record.content),
+        source: "postgresql" as const,
+        relevance: asNumber(record.relevance, 0.5),
+        timestamp: asString(record.timestamp, new Date().toISOString()),
+        metadata: asRecord(record.metadata) ?? undefined,
+      };
+    });
   } catch (err) {
     console.error("[memory-search] PostgreSQL error:", err);
     return [];
@@ -74,54 +94,65 @@ async function searchPostgreSQL(query: string, limit = 10): Promise<MemoryResult
 /**
  * Search Redis for recent session messages
  */
-async function searchRedis(sessionPattern = "session:*", limit = 50, searchQuery = ""): Promise<MemoryResult[]> {
+async function searchRedis(
+  sessionPattern = "session:*",
+  limit = 50,
+  searchQuery = "",
+): Promise<MemoryResult[]> {
   try {
     // Get all session keys
-    const keysJson = execSync(
-      `${REDIS_CLI} KEYS "${sessionPattern}"`,
-      { encoding: "utf-8" }
-    ).trim();
+    const keysJson = execSync(`${REDIS_CLI} KEYS "${sessionPattern}"`, {
+      encoding: "utf-8",
+    }).trim();
 
     if (!keysJson) {
       return [];
     }
 
-    const keys = keysJson.split("\n").filter(k => k.trim());
+    const keys = keysJson.split("\n").filter((k) => k.trim());
     const results: MemoryResult[] = [];
 
-    for (const key of keys.slice(0, 10)) { // Limit keys to search
+    for (const key of keys.slice(0, 10)) {
+      // Limit keys to search
       try {
         // Get recent messages from this session
-        const messagesJson = execSync(
-          `${REDIS_CLI} LRANGE "${key}" -${limit} -1`,
-          { encoding: "utf-8" }
-        ).trim();
+        const messagesJson = execSync(`${REDIS_CLI} LRANGE "${key}" -${limit} -1`, {
+          encoding: "utf-8",
+        }).trim();
 
-        if (!messagesJson) continue;
+        if (!messagesJson) {
+          continue;
+        }
 
         // Parse JSON messages (each line is a JSON object)
-        const messages = messagesJson.split("\n")
-          .filter(m => m.trim())
-          .map(m => {
+        const messages = messagesJson
+          .split("\n")
+          .filter((m) => m.trim())
+          .map((m) => {
             try {
               return JSON.parse(m);
             } catch {
               return null;
             }
           })
-          .filter(m => m && m.content);
+          .filter((m) => m && m.content);
 
         for (const msg of messages) {
-          const content = typeof msg.content === "string" ? msg.content : 
-                        (msg.content?.text || JSON.stringify(msg.content));
-          if (content && (!searchQuery || content.toLowerCase().includes(searchQuery.toLowerCase()))) {
+          const content =
+            typeof msg.content === "string"
+              ? msg.content
+              : msg.content?.text || JSON.stringify(msg.content);
+          if (
+            content &&
+            (!searchQuery || content.toLowerCase().includes(searchQuery.toLowerCase()))
+          ) {
             results.push({
               id: `${key}:${msg.id || randomUUID()}`,
               content: content.substring(0, 500),
               source: "redis",
               relevance: 0.8, // Higher relevance for recent
               timestamp: msg.timestamp || new Date().toISOString(),
-              metadata: { sessionKey: key }
+              metadata: { sessionKey: key },
             });
           }
         }
@@ -140,7 +171,7 @@ async function searchRedis(sessionPattern = "session:*", limit = 50, searchQuery
 /**
  * Search web for additional information
  */
-async function searchWeb(query: string, limit = 5): Promise<MemoryResult[]> {
+async function searchWeb(query: string, _limit = 5): Promise<MemoryResult[]> {
   // This would use the Brave API or similar
   // For now, return empty - would need web search integration
   console.log("[memory-search] Web search requested for:", query);
@@ -157,28 +188,28 @@ export async function unifiedSearch(opts: UnifiedSearchOptions): Promise<MemoryR
     includeRedis = true,
     includePostgres = true,
     includeWeb = false,
-    minRelevance = 0.3
+    minRelevance = 0.3,
   } = opts;
 
   const results: MemoryResult[] = [];
 
   // Parallel search
   const searches: Promise<MemoryResult[]>[] = [];
-  
+
   if (includePostgres) {
     searches.push(searchPostgreSQL(query, limit));
   }
-  
+
   if (includeRedis) {
     searches.push(searchRedis("session:*", limit));
   }
-  
+
   if (includeWeb) {
     searches.push(searchWeb(query, limit));
   }
 
   const allResults = await Promise.all(searches);
-  
+
   // Merge and sort by relevance
   for (const resultSet of allResults) {
     results.push(...resultSet);
@@ -186,8 +217,8 @@ export async function unifiedSearch(opts: UnifiedSearchOptions): Promise<MemoryR
 
   // Sort by relevance and limit
   return results
-    .filter(r => r.relevance >= minRelevance)
-    .sort((a, b) => b.relevance - a.relevance)
+    .filter((r) => r.relevance >= minRelevance)
+    .toSorted((a, b) => b.relevance - a.relevance)
     .slice(0, limit);
 }
 
@@ -196,16 +227,19 @@ export async function unifiedSearch(opts: UnifiedSearchOptions): Promise<MemoryR
  */
 export async function detectConflicts(
   newContent: string,
-  threshold = 0.7
+  threshold = 0.7,
 ): Promise<{ id: string; content: string; similarity: number }[]> {
   try {
     // Extract key terms from new content
-    const keyTerms = newContent.split(/\s+/)
-      .filter(t => t.length > 3)
+    const keyTerms = newContent
+      .split(/\s+/)
+      .filter((t) => t.length > 3)
       .slice(0, 10)
       .join("|");
 
-    if (!keyTerms) return [];
+    if (!keyTerms) {
+      return [];
+    }
 
     const resultsJson = execSync(
       `${PSQL_PATH} -U tars -d openclaw_memory -t -h localhost -p 5432 -c "
@@ -217,21 +251,25 @@ export async function detectConflicts(
           ORDER BY sim DESC
           LIMIT 20
         ) t"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     ).trim();
 
     if (!resultsJson || resultsJson === "" || resultsJson === "null") {
       return [];
     }
 
-    const rows = JSON.parse(resultsJson);
+    const rows = parseJsonArray(resultsJson);
     return rows
-      .filter((r: any) => r.sim >= threshold)
-      .map((r: any) => ({
-        id: r.id,
-        content: r.content.substring(0, 200),
-        similarity: r.sim || 0
-      }));
+      .map((row) => {
+        const record = asRecord(row) ?? {};
+        const similarity = asNumber(record.sim, 0);
+        return {
+          id: asString(record.id),
+          content: asString(record.content).substring(0, 200),
+          similarity,
+        };
+      })
+      .filter((entry) => entry.id && entry.similarity >= threshold);
   } catch (err) {
     console.error("[memory-conflict] Detection error:", err);
     return [];
@@ -243,7 +281,7 @@ export async function detectConflicts(
  */
 export async function updateMemory(
   id: string,
-  updates: { content?: string; conflicts?: string[]; refresh_after?: string }
+  updates: { content?: string; conflicts?: string[]; refresh_after?: string },
 ): Promise<boolean> {
   try {
     const setClauses: string[] = [];
@@ -254,24 +292,34 @@ export async function updateMemory(
       args.push(updates.content);
     }
     if (updates.conflicts) {
-      setClauses.push("metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{conflicts}', $" + (args.length + 1) + "::jsonb)");
+      setClauses.push(
+        "metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{conflicts}', $" +
+          (args.length + 1) +
+          "::jsonb)",
+      );
       args.push(JSON.stringify(updates.conflicts));
     }
     if (updates.refresh_after) {
-      setClauses.push("metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{refresh_after}', $" + (args.length + 1) + "::jsonb)");
+      setClauses.push(
+        "metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{refresh_after}', $" +
+          (args.length + 1) +
+          "::jsonb)",
+      );
       args.push(`"${updates.refresh_after}"`);
     }
 
-    if (setClauses.length === 0) return false;
+    if (setClauses.length === 0) {
+      return false;
+    }
 
     args.push(id);
-    
+
     execSync(
       `${PSQL_PATH} -U tars -d openclaw_memory -h localhost -p 5432 -c "
         UPDATE memories 
         SET ${setClauses.join(", ")}
         WHERE id = $${args.length}"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     );
 
     return true;
@@ -296,21 +344,24 @@ export async function getMemoriesNeedingRefresh(): Promise<MemoryResult[]> {
           ORDER BY created_at ASC
           LIMIT 20
         ) t"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     ).trim();
 
     if (!resultsJson || resultsJson === "" || resultsJson === "null") {
       return [];
     }
 
-    return JSON.parse(resultsJson).map((row: any) => ({
-      id: row.id,
-      content: row.content,
-      source: "postgresql" as const,
-      relevance: 1,
-      timestamp: row.timestamp,
-      metadata: row.metadata
-    }));
+    return parseJsonArray(resultsJson).map((row): MemoryResult => {
+      const record = asRecord(row) ?? {};
+      return {
+        id: asString(record.id, randomUUID()),
+        content: asString(record.content),
+        source: "postgresql" as const,
+        relevance: 1,
+        timestamp: asString(record.timestamp, new Date().toISOString()),
+        metadata: asRecord(record.metadata) ?? undefined,
+      };
+    });
   } catch (err) {
     console.error("[memory-refresh] Error:", err);
     return [];
@@ -324,7 +375,7 @@ export async function storeMemory(
   content: string,
   source = "agent",
   importance = 50,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
 ): Promise<string | null> {
   try {
     const id = randomUUID();
@@ -335,7 +386,7 @@ export async function storeMemory(
       `${PSQL_PATH} -U tars -d openclaw_memory -h localhost -p 5432 -c "
         INSERT INTO memories (id, content, metadata, source, importance, tags, created_at)
         VALUES ('${id}', E'${safeContent}', '${safeMetadata}'::jsonb, '${source}', ${importance}, ARRAY['${source}'], NOW())"`,
-      { encoding: "utf-8" }
+      { encoding: "utf-8" },
     );
 
     return id;

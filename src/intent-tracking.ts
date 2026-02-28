@@ -20,7 +20,7 @@ export interface IntentResult {
 
 export async function detectIntent(text: string): Promise<IntentResult> {
   try {
-    const { stdout, stderr } = await execAsync(
+    const { stdout } = await execAsync(
       `python3 "${SCRIPT_PATH}" process -t "${text.replace(/"/g, '\\"')}"`,
       { timeout: 5000 },
     );
@@ -82,10 +82,14 @@ export async function maybeGenerateFollowUp(
   message: string,
   isUserMessage: boolean = true,
 ): Promise<string | null> {
-  if (!isUserMessage) return null;
+  if (!isUserMessage) {
+    return null;
+  }
 
   // Only trigger on casual messages
-  if (!isCasualMessage(message)) return null;
+  if (!isCasualMessage(message)) {
+    return null;
+  }
 
   const result = await detectIntent(message);
   return result.message;

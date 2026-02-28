@@ -195,6 +195,7 @@ export function resolveDefaultConfigCandidates(
     const resolved = resolveUserPath(omniclawStateDir);
     candidates.push(path.join(resolved, CONFIG_FILENAME));
     candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(resolved, name)));
+    return candidates;
   }
 
   const defaultDirs = [newStateDir(homedir), ...legacyStateDirs(homedir)];

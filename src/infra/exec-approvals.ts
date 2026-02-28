@@ -1268,7 +1268,7 @@ export function evaluateShellAllowlist(params: {
   };
 }
 
-export function requiresExecApproval(params: {
+export function requiresExecApproval(_params: {
   ask: ExecAsk;
   security: ExecSecurity;
   analysisOk: boolean;

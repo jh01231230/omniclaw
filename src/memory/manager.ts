@@ -321,7 +321,7 @@ export class MemoryIndexManager {
         const memories = await this.pgStore.searchSimilar(queryVec, opts?.maxResults ?? 10);
         return memories.map(
           (m: MemoryEntry): MemorySearchResult => ({
-            path: String(m.metadata?.file || m.id),
+            path: typeof m.metadata?.file === "string" ? m.metadata.file : m.id,
             startLine: 1,
             endLine: 100,
             score: 0.9, // PostgreSQL returns unscaled similarity
@@ -330,7 +330,7 @@ export class MemoryIndexManager {
           }),
         );
       } catch (err) {
-        log.warn(`PostgreSQL search failed: ${err}`);
+        log.warn(`PostgreSQL search failed: ${String(err)}`);
         return [];
       }
     }

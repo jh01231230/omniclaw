@@ -5,7 +5,7 @@ import path from "node:path";
 import type { ResolvedBrowserConfig } from "./config.js";
 
 export type BrowserExecutable = {
-  kind: "brave" | "canary" | "chromium" | "chrome" | "custom" | "edge";
+  kind: "brave" | "canary" | "chromium" | "chrome" | "custom" | "edge" | "playwright";
   path: string;
 };
 
@@ -453,6 +453,78 @@ function findFirstExecutable(candidates: Array<BrowserExecutable>): BrowserExecu
   return null;
 }
 
+function resolvePlaywrightCacheRoot(platform: NodeJS.Platform): string | null {
+  const configured = (process.env.PLAYWRIGHT_BROWSERS_PATH ?? "").trim();
+  if (configured && configured !== "0") {
+    if (configured.startsWith("~")) {
+      return path.resolve(configured.replace(/^~(?=$|[\\/])/, os.homedir()));
+    }
+    return path.resolve(configured);
+  }
+  if (platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Caches", "ms-playwright");
+  }
+  if (platform === "linux") {
+    return path.join(os.homedir(), ".cache", "ms-playwright");
+  }
+  if (platform === "win32") {
+    return path.join(
+      process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"),
+      "ms-playwright",
+    );
+  }
+  return null;
+}
+
+function resolvePlaywrightChromiumPath(
+  cacheRoot: string,
+  platform: NodeJS.Platform,
+): BrowserExecutable | null {
+  if (!exists(cacheRoot)) {
+    return null;
+  }
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(cacheRoot);
+  } catch {
+    return null;
+  }
+  const chromiumDirs = entries
+    .filter((entry) => /^chromium-\d+$/i.test(entry))
+    .toSorted((a, b) => {
+      const aRev = Number.parseInt(a.split("-")[1] ?? "0", 10);
+      const bRev = Number.parseInt(b.split("-")[1] ?? "0", 10);
+      return bRev - aRev;
+    });
+  if (chromiumDirs.length === 0) {
+    return null;
+  }
+
+  for (const dir of chromiumDirs) {
+    const base = path.join(cacheRoot, dir);
+    const candidate =
+      platform === "darwin"
+        ? path.join(base, "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium")
+        : platform === "win32"
+          ? path.join(base, "chrome-win", "chrome.exe")
+          : path.join(base, "chrome-linux", "chrome");
+    if (exists(candidate)) {
+      return { kind: "playwright", path: candidate };
+    }
+  }
+  return null;
+}
+
+export function findPlaywrightChromiumExecutable(
+  platform: NodeJS.Platform = process.platform,
+): BrowserExecutable | null {
+  const cacheRoot = resolvePlaywrightCacheRoot(platform);
+  if (!cacheRoot) {
+    return null;
+  }
+  return resolvePlaywrightChromiumPath(cacheRoot, platform);
+}
+
 export function findChromeExecutableMac(): BrowserExecutable | null {
   const candidates: Array<BrowserExecutable> = [
     {
@@ -610,6 +682,11 @@ export function resolveBrowserExecutableForPlatform(
   const detected = detectDefaultChromiumExecutable(platform);
   if (detected) {
     return detected;
+  }
+
+  const playwrightChromium = findPlaywrightChromiumExecutable(platform);
+  if (playwrightChromium) {
+    return playwrightChromium;
   }
 
   if (platform === "darwin") {

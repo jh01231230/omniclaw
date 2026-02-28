@@ -165,7 +165,7 @@ export function taskLog(
   }
 
   // Write to daily audit log file (async, don't await)
-  writeToFile({ timestamp, taskId, status, message, details });
+  void writeToFile({ timestamp, taskId, status, message, details });
 }
 
 /**
@@ -214,8 +214,8 @@ export async function listAuditLogDates(): Promise<string[]> {
     return files
       .filter((f) => f.endsWith(".log"))
       .map((f) => f.replace(".log", ""))
-      .sort()
-      .reverse();
+      .toSorted()
+      .toReversed();
   } catch {
     return [];
   }

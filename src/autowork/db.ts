@@ -6,8 +6,7 @@
 
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
-import { taskLog, type TaskStatus } from "./logger.js";
+import { taskLog } from "./logger.js";
 
 export interface DbMemory {
   id: string;
@@ -99,7 +98,9 @@ export function queryPendingTasks(limit: number = 10): DbMemory[] {
 
   try {
     const result = execPg(sql);
-    if (!result) return [];
+    if (!result) {
+      return [];
+    }
 
     return result
       .split("\n")
@@ -176,7 +177,7 @@ export function createTask(
   `;
 
   try {
-    const result = execPg(sql);
+    execPg(sql);
     taskLog("DB", "CREATE", `Created task: ${title}`, { id, importance });
     return id;
   } catch (err) {
@@ -197,7 +198,9 @@ export function getTaskById(taskId: string): DbMemory | null {
 
   try {
     const result = execPg(sql);
-    if (!result) return null;
+    if (!result) {
+      return null;
+    }
 
     const [id, content, metadata, importance_score, created_at, detail_level] = result.split("|");
     return {
@@ -218,7 +221,9 @@ export function getTaskById(taskId: string): DbMemory | null {
  */
 export function appendTaskNote(taskId: string, note: string): boolean {
   const task = getTaskById(taskId);
-  if (!task) return false;
+  if (!task) {
+    return false;
+  }
 
   const existingNotes = (task.metadata.notes as string[]) || [];
   const newNotes = [

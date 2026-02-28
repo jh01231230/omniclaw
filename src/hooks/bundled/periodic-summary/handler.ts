@@ -75,8 +75,8 @@ const summarizeConversations: HookHandler = async (event: InternalHookEvent) => 
     const files = await fs.readdir(sessionsDir);
     const jsonlFiles = files
       .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".lock"))
-      .sort()
-      .reverse()
+      .toSorted()
+      .toReversed()
       .slice(0, 5); // Last 5 sessions
 
     if (jsonlFiles.length === 0) {
@@ -126,10 +126,12 @@ ${prompt}
     console.log("[periodic-summary] Summary saved to:", outputPath);
 
     // Store to PostgreSQL in full mode, or if explicitly configured
-    const memoryCfg = memorySearch as { deployment?: string; store?: { driver?: string } } | undefined;
+    const memoryCfg = memorySearch as
+      | { deployment?: string; store?: { driver?: string } }
+      | undefined;
     const deployment = memoryCfg?.deployment;
     const storeDriver = memoryCfg?.store?.driver;
-    
+
     if (deployment === "full" || storeDriver === "postgresql") {
       await storeSummaryToPostgreSQL(summaryEntry, "periodic-summary");
     }

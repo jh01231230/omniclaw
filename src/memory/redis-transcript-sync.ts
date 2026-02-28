@@ -9,7 +9,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { OmniClawConfig } from "../config/config.js";
-import type { SessionEntry } from "../config/sessions/types.js";
 import { resolveStateDir } from "../config/paths.js";
 import { loadSessionStore, resolveSessionTranscriptPath } from "../config/sessions.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
@@ -71,8 +70,10 @@ function findSessionKeyByTranscriptFile(sessionFile: string): string | null {
   const normalizedFile = path.normalize(sessionFile);
 
   for (const [sessionKey, entry] of Object.entries(store)) {
-    if (!entry || typeof entry !== "object") continue;
-    const e = entry as SessionEntry;
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const e = entry;
     const expectedPath =
       e.sessionFile?.trim() || resolveSessionTranscriptPath(e.sessionId ?? "", agentId);
     if (path.normalize(expectedPath) === normalizedFile) {
@@ -83,12 +84,21 @@ function findSessionKeyByTranscriptFile(sessionFile: string): string | null {
 }
 
 function extractTextFromContent(content: unknown): string {
-  if (!content) return "";
-  if (typeof content === "string") return content;
+  if (!content) {
+    return "";
+  }
+  if (typeof content === "string") {
+    return content;
+  }
+  if (typeof content === "number" || typeof content === "boolean" || typeof content === "bigint") {
+    return String(content);
+  }
   if (Array.isArray(content)) {
     return content
       .map((c: unknown) => {
-        if (typeof c === "string") return c;
+        if (typeof c === "string") {
+          return c;
+        }
         if (typeof c === "object" && c !== null) {
           const o = c as Record<string, unknown>;
           return (o.text as string) || (o.thinking as string) || "";
@@ -97,20 +107,31 @@ function extractTextFromContent(content: unknown): string {
       })
       .join("");
   }
-  return String(content);
+  if (typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return "";
+    }
+  }
+  return "";
 }
 
 /**
  * Parse transcript JSONL file into SessionMessage array (user/assistant only).
  */
 function parseTranscriptFile(sessionFile: string): SessionMessage[] {
-  if (!fs.existsSync(sessionFile)) return [];
+  if (!fs.existsSync(sessionFile)) {
+    return [];
+  }
 
   const lines = fs.readFileSync(sessionFile, "utf-8").split(/\r?\n/);
   const messages: SessionMessage[] = [];
 
   for (const line of lines) {
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      continue;
+    }
     try {
       const parsed = JSON.parse(line) as {
         type?: string;
@@ -118,14 +139,20 @@ function parseTranscriptFile(sessionFile: string): SessionMessage[] {
         id?: string;
         timestamp?: string;
       };
-      if (parsed?.type !== "message" || !parsed.message) continue;
+      if (parsed?.type !== "message" || !parsed.message) {
+        continue;
+      }
 
       const msg = parsed.message;
       const role = msg.role;
-      if (role !== "user" && role !== "assistant") continue;
+      if (role !== "user" && role !== "assistant") {
+        continue;
+      }
 
       const content = extractTextFromContent(msg.content);
-      if (!content.trim()) continue;
+      if (!content.trim()) {
+        continue;
+      }
 
       messages.push({
         id: parsed.id ?? `msg-${messages.length}`,
@@ -176,13 +203,19 @@ export function initRedisTranscriptSync(cfg: OmniClawConfig): () => void {
 
   unsubscribe = onSessionTranscriptUpdate((update) => {
     const sessionFile = update.sessionFile?.trim();
-    if (!sessionFile || !sessionFile.endsWith(".jsonl")) return;
+    if (!sessionFile || !sessionFile.endsWith(".jsonl")) {
+      return;
+    }
 
     const sessionKey = findSessionKeyByTranscriptFile(sessionFile);
-    if (!sessionKey) return;
+    if (!sessionKey) {
+      return;
+    }
 
     const messages = parseTranscriptFile(sessionFile);
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      return;
+    }
 
     void syncTranscriptToRedis(redis, sessionKey, messages).catch((err) => {
       console.error("[redis-transcript-sync] Failed to sync:", err);

@@ -60,4 +60,20 @@ describe("config io paths", () => {
       expect(io.loadConfig().gateway?.port).toBe(20002);
     });
   });
+
+  it("does not fall back to default config when OMNICLAW_STATE_DIR is set", async () => {
+    await withTempHome(async (home) => {
+      const defaultConfigPath = await writeConfig(home, ".omniclaw", 19001);
+      const overrideDir = path.join(home, "isolated-state");
+      await fs.mkdir(overrideDir, { recursive: true });
+
+      const io = createConfigIO({
+        env: { OMNICLAW_STATE_DIR: overrideDir } as NodeJS.ProcessEnv,
+        homedir: () => home,
+      });
+
+      expect(io.configPath).toBe(path.join(overrideDir, "omniclaw.json"));
+      expect(io.configPath).not.toBe(defaultConfigPath);
+    });
+  });
 });

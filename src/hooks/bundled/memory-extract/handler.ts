@@ -11,32 +11,6 @@ import { resolveStateDir } from "../../../config/paths.js";
  * Uses Redis for short-term memory, PostgreSQL for long-term
  */
 
-const MEMORY_TRIGGERS = {
-  decision_point: true, // Important decisions
-  pattern_recognition: true, // Pattern appears 3+ times
-  emotion_peak: true, // Emotional peaks
-  skill_learned: true, // New skill learned
-  relationship_change: true, // Relationship changes
-  failed_attempt: true, // Failure lessons
-};
-
-const DETAIL_LEVELS = {
-  keyframe: "Key decision points, under 200 chars",
-  detail: "Full context, under 2000 chars",
-  raw: "Raw conversation, important sessions only",
-};
-
-interface ShortTermMemory {
-  sessionId: string;
-  messages: Array<{
-    role: string;
-    content: string;
-    timestamp: number;
-  }>;
-  createdAt: number;
-  lastAccess: number;
-}
-
 const extractKeyframe = (content: string): string => {
   // Extract keyframe - first 200 chars or first sentence
   const sentences = content.split(/[.!?]/);
@@ -78,16 +52,28 @@ const calculateImportance = async (content: string, _model?: string): Promise<nu
   }
 
   // Length factor
-  if (content.length > 500) score += 0.1;
-  if (content.length > 2000) score += 0.1;
+  if (content.length > 500) {
+    score += 0.1;
+  }
+  if (content.length > 2000) {
+    score += 0.1;
+  }
 
   return Math.min(score, 1.0);
 };
 
+function isSessionEndEvent(event: InternalHookEvent): boolean {
+  if (event.type !== "session") {
+    return false;
+  }
+  const withAction = event as unknown as { action?: unknown };
+  return withAction.action === "end";
+}
+
 const extractMemory: HookHandler = async (event: InternalHookEvent) => {
   const eventType = event.type as string;
   // Run on session end or periodic trigger
-  if (event.type !== "session" || (event as any).action !== "end") {
+  if (!isSessionEndEvent(event)) {
     // Also run on heartbeat for periodic extraction
     if (eventType !== "heartbeat") {
       return;
@@ -114,8 +100,8 @@ const extractMemory: HookHandler = async (event: InternalHookEvent) => {
     const files = await fs.readdir(sessionsDir);
     const jsonlFiles = files
       .filter((f) => f.endsWith(".jsonl") && !f.endsWith(".lock"))
-      .sort()
-      .reverse()
+      .toSorted()
+      .toReversed()
       .slice(0, 3);
 
     for (const file of jsonlFiles) {

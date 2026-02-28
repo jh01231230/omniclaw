@@ -9,6 +9,7 @@ import type { RuntimeEnv } from "../runtime.js";
 import type { NodeManagerChoice, OnboardMode, ResetScope } from "./onboard-types.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../agents/workspace.js";
 import { CONFIG_PATH } from "../config/config.js";
+import { resolveStateDir } from "../config/paths.js";
 import { resolveSessionTranscriptsDirForAgent } from "../config/sessions.js";
 import { callGateway } from "../gateway/call.js";
 import { normalizeControlUiBasePath } from "../gateway/control-ui-shared.js";
@@ -272,8 +273,7 @@ export async function ensureWorkspaceAndSessions(
 }
 
 export async function ensureMemoryDir(runtime: RuntimeEnv): Promise<string> {
-  const home = process.env.HOME || os.homedir();
-  const memoryDir = path.join(home, ".omniclaw", "memory");
+  const memoryDir = path.join(resolveStateDir(process.env, os.homedir), "memory");
   await fs.mkdir(memoryDir, { recursive: true });
   runtime.log(`Memory OK: ${shortenHomePath(memoryDir)}`);
   return memoryDir;

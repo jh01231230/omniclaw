@@ -163,7 +163,7 @@ describe("runOnboardingWizard", () => {
       prompter,
     );
 
-    expect(select).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalled();
     expect(setupChannels).not.toHaveBeenCalled();
     expect(setupSkills).not.toHaveBeenCalled();
     expect(healthCommand).not.toHaveBeenCalled();

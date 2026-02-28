@@ -47,7 +47,7 @@ export class RedisSessionStore {
   private connected: boolean = false;
 
   constructor(config?: Partial<RedisSessionStoreConfig>) {
-    this.config = { ...DEFAULT_CONFIG, ...(config ?? {}) };
+    this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
   /**
@@ -137,7 +137,7 @@ export class RedisSessionStore {
     const redisKey = this.getSessionKey(sessionKey);
     const messages = await this.client!.lRange(redisKey, 0, limit - 1);
 
-    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).reverse();
+    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).toReversed();
   }
 
   /**
@@ -151,7 +151,7 @@ export class RedisSessionStore {
     const redisKey = this.getSessionKey(sessionKey);
     const messages = await this.client!.lRange(redisKey, 0, -1);
 
-    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).reverse();
+    return messages.map((msg: string) => JSON.parse(msg) as SessionMessage).toReversed();
   }
 
   /**

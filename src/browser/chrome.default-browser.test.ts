@@ -6,10 +6,12 @@ vi.mock("node:child_process", () => ({
 vi.mock("node:fs", () => {
   const existsSync = vi.fn();
   const readFileSync = vi.fn();
+  const readdirSync = vi.fn();
   return {
     existsSync,
     readFileSync,
-    default: { existsSync, readFileSync },
+    readdirSync,
+    default: { existsSync, readFileSync, readdirSync },
   };
 });
 import { execFileSync } from "node:child_process";
@@ -80,5 +82,36 @@ describe("browser default executable detection", () => {
     );
 
     expect(exe?.path).toContain("Google Chrome.app/Contents/MacOS/Google Chrome");
+  });
+
+  it("falls back to Playwright Chromium when no system browser is found", async () => {
+    vi.stubEnv("HOME", "/home/tester");
+    vi.mocked(execFileSync).mockImplementation(() => {
+      throw new Error("no default browser");
+    });
+    vi.mocked(fs.readdirSync).mockImplementation((value) => {
+      const str = String(value);
+      if (str.includes(".cache/ms-playwright")) {
+        return ["chromium-1200", "chromium-1100"];
+      }
+      return [];
+    });
+    vi.mocked(fs.existsSync).mockImplementation((value) => {
+      const str = String(value);
+      return (
+        str.includes(".cache/ms-playwright") &&
+        (str.endsWith(".cache/ms-playwright") ||
+          str.includes(".cache/ms-playwright/chromium-1200/chrome-linux/chrome"))
+      );
+    });
+
+    const { resolveBrowserExecutableForPlatform } = await import("./chrome.executables.js");
+    const exe = resolveBrowserExecutableForPlatform(
+      {} as Parameters<typeof resolveBrowserExecutableForPlatform>[0],
+      "linux",
+    );
+
+    expect(exe?.kind).toBe("playwright");
+    expect(exe?.path).toContain("chromium-1200/chrome-linux/chrome");
   });
 });

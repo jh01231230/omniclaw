@@ -10,23 +10,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  initAutoworkDb,
-  queryPendingTasks,
-  updateTaskStatus as dbUpdateTaskStatus,
-  createTask,
-  getTaskById,
-  pingDb,
-  type DbMemory,
-} from "./db.js";
-import { createBranch, commitChanges, getGitStatus, isGitRepo } from "./git.js";
-import {
-  initAutoworkLogger,
-  taskLog,
-  listAuditLogDates,
-  getAuditLog,
-  type TaskStatus,
-} from "./logger.js";
+import { commitChanges, getGitStatus, isGitRepo } from "./git.js";
+import { initAutoworkLogger, taskLog } from "./logger.js";
 
 // ===== Types =====
 
@@ -102,7 +87,9 @@ export function initAutowork(
  * Scan for pending tasks from configured sources
  */
 export async function scanForTasks(): Promise<TodoTask[]> {
-  if (!config) return [];
+  if (!config) {
+    return [];
+  }
 
   const tasks: TodoTask[] = [];
 
@@ -131,7 +118,7 @@ export async function scanForTasks(): Promise<TodoTask[]> {
 /**
  * Scan memory database for pending tasks (full mode)
  */
-async function scanMemoryDb(query?: string): Promise<TodoTask[]> {
+async function scanMemoryDb(_query?: string): Promise<TodoTask[]> {
   // TODO: query the PostgreSQL memory database
   // For now, return empty - will implement when memory DB schema is finalized
   return [];
@@ -140,7 +127,7 @@ async function scanMemoryDb(query?: string): Promise<TodoTask[]> {
 /**
  * Scan code for TODO/FIXME comments (minimal mode fallback)
  */
-async function scanCodeTodos(paths: string[]): Promise<TodoTask[]> {
+async function scanCodeTodos(_paths: string[]): Promise<TodoTask[]> {
   // TODO: implement grep for TODO/FIXME in code
   return [];
 }
@@ -151,7 +138,9 @@ async function scanCodeTodos(paths: string[]): Promise<TodoTask[]> {
  * Start executing a task
  */
 export async function startTask(task: TodoTask, plan: string[]): Promise<void> {
-  if (!config) return;
+  if (!config) {
+    return;
+  }
 
   const execution: TaskExecution = {
     taskId: randomUUID().slice(0, 8).toUpperCase(),
@@ -173,17 +162,18 @@ export async function startTask(task: TodoTask, plan: string[]): Promise<void> {
 
   // Notify user of the plan
   const planText = plan.map((step, i) => `${i + 1}. ${step}`).join("\n");
-  notifyUser(
-    `🤔 **开始新任务**\n\n` + `**任务**: ${task.title}\n\n` + `**执行计划**:\n${planText}`,
-    { isStartNotification: true },
-  );
+  notifyUser(`🤔 **开始新任务**\n\n**任务**: ${task.title}\n\n**执行计划**:\n${planText}`, {
+    isStartNotification: true,
+  });
 }
 
 /**
  * Execute current task step
  */
 export async function executeCurrentStep(): Promise<boolean> {
-  if (!currentTask || !config) return false;
+  if (!currentTask || !config) {
+    return false;
+  }
 
   currentTask.status = "executing";
   const step = currentTask.plan[currentTask.currentStep];
@@ -204,7 +194,9 @@ export async function executeCurrentStep(): Promise<boolean> {
  * Move to next step or complete
  */
 export async function advanceTask(): Promise<void> {
-  if (!currentTask) return;
+  if (!currentTask) {
+    return;
+  }
 
   currentTask.currentStep++;
 
@@ -226,7 +218,9 @@ export async function advanceTask(): Promise<void> {
  * Send progress report to user
  */
 async function sendProgressReport(): Promise<void> {
-  if (!currentTask || !config) return;
+  if (!currentTask || !config) {
+    return;
+  }
 
   currentTask.progressReports++;
   const step = currentTask.currentStep + 1;
@@ -254,7 +248,9 @@ async function sendProgressReport(): Promise<void> {
  * Mark current task as blocked
  */
 export function blockTask(reason: string, requiresUserAction: string): void {
-  if (!currentTask) return;
+  if (!currentTask) {
+    return;
+  }
 
   currentTask.status = "blocked";
 
@@ -278,7 +274,9 @@ export function blockTask(reason: string, requiresUserAction: string): void {
  * Complete current task
  */
 export async function completeTask(): Promise<void> {
-  if (!currentTask || !config) return;
+  if (!currentTask || !config) {
+    return;
+  }
 
   currentTask.status = "completed";
   const duration = Math.round((Date.now() - new Date(currentTask.startedAt).getTime()) / 60000);
@@ -296,12 +294,7 @@ export async function completeTask(): Promise<void> {
 
   // Commit changes if in git repo
   if (isGitRepo(workDir)) {
-    await commitChanges(
-      currentTask.taskId,
-      `complete: ${currentTask.task.title}`,
-      undefined,
-      workDir,
-    );
+    commitChanges(currentTask.taskId, `complete: ${currentTask.task.title}`, undefined, workDir);
   }
 
   // Notify completion
@@ -325,7 +318,9 @@ export async function completeTask(): Promise<void> {
  * Fail current task
  */
 export async function failTask(reason: string): Promise<void> {
-  if (!currentTask || !config) return;
+  if (!currentTask || !config) {
+    return;
+  }
 
   currentTask.status = "failed";
   const duration = Math.round((Date.now() - new Date(currentTask.startedAt).getTime()) / 60000);
@@ -363,7 +358,9 @@ interface NotifyOptions {
 }
 
 function notifyUser(message: string, opts: NotifyOptions = {}): void {
-  if (!messageCallback) return;
+  if (!messageCallback) {
+    return;
+  }
 
   // Update last notification tracking
   lastUserNotificationTime = Date.now();

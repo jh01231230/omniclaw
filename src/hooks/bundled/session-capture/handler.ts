@@ -41,21 +41,21 @@ const captureSessionMessage: HookHandler = async (event: InternalHookEvent): Pro
   const cfg = loadConfig();
   const memorySearch = cfg.agents?.defaults?.memorySearch as Record<string, unknown> | undefined;
   const deployment = memorySearch?.deployment as string | undefined;
-  
+
   if (deployment !== "full") {
     console.log("[session-capture] Not in full mode, skipping");
     return;
   }
 
   // Extract session info from context
-  const context = event.context as Record<string, unknown> || {};
+  const context = event.context || {};
   const sessionId = (context.sessionId as string) || "unknown";
   const sessionKey = event.sessionKey || "unknown";
 
   // Store a simple indicator that the session was active
   // In a full implementation, we'd extract recent messages from Redis
-  const content = `Session active: ${sessionKey} (${sessionId}), event: ${event.type}:${event.action || 'none'}`;
-  
+  const content = `Session active: ${sessionKey} (${sessionId}), event: ${event.type}:${event.action || "none"}`;
+
   await storeConversationToPostgreSQL(content, sessionId, "session-capture");
 };
 
