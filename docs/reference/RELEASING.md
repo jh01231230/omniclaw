@@ -34,9 +34,9 @@ When the operator says “release”, immediately do this preflight (no extra qu
 - [ ] Confirm `dist/build-info.json` exists and includes the expected `commit` hash (CLI banner uses this for npm installs).
 - [ ] Optional: `npm pack --pack-destination /tmp` after the build; inspect the tarball contents and keep it handy for the GitHub release (do **not** commit it).
 
-3. **Changelog & docs**
+3. **Release notes & docs**
 
-- [ ] Update `CHANGELOG.md` with user-facing highlights (create the file if missing); keep entries strictly descending by version.
+- [ ] Update `RELEASE_NOTES.md` with user-facing highlights; keep entries strictly descending by version.
 - [ ] Ensure README examples/flags match current CLI behavior (notably new commands or options).
 
 4. **Validation**
@@ -83,7 +83,7 @@ When the operator says “release”, immediately do this preflight (no extra qu
 7. **GitHub release + appcast**
 
 - [ ] Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z` (or `git push --tags`).
-- [ ] Create/refresh the GitHub release for `vX.Y.Z` with **title `omniclaw X.Y.Z`** (not just the tag); body should include the **full** changelog section for that version (Highlights + Changes + Fixes), inline (no bare links), and **must not repeat the title inside the body**.
+- [ ] Create/refresh the GitHub release for `vX.Y.Z` with **title `omniclaw X.Y.Z`** (not just the tag); body should include the **full** release notes section for that version (Highlights + Changes + Fixes), inline (no bare links), and **must not repeat the title inside the body**.
 - [ ] Attach artifacts: `npm pack` tarball (optional), `OmniClaw-X.Y.Z.zip`, and `OmniClaw-X.Y.Z.dSYM.zip` (if generated).
 - [ ] Commit the updated `appcast.xml` and push it (Sparkle feeds from main).
 - [ ] From a clean temp directory (no `package.json`), run `npx -y omniclaw@X.Y.Z send --help` to confirm install/CLI entrypoints work.

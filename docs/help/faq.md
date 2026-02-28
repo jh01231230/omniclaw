@@ -431,8 +431,8 @@ Related: [Migrating](/install/migrating), [Where things live on disk](/help/faq#
 
 ### Where do I see what is new in the latest version
 
-Check the GitHub changelog:  
-https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md
+Check the GitHub release notes:  
+https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md
 
 Newest entries are at the top. If the top section is marked **Unreleased**, the next dated
 section is the latest shipped version. Entries are grouped by **Highlights**, **Changes**, and
@@ -460,7 +460,7 @@ that same version to `latest`**. That’s why beta and stable can point at the
 **same version**.
 
 See what changed:  
-https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md
+https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md
 
 ### How do I install the beta version and whats the difference between beta and dev
 

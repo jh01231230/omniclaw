@@ -420,8 +420,8 @@ omniclaw doctor
 
 ### 在哪里查看最新版本的更新内容
 
-查看 GitHub 变更日志：
-https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md
+查看 GitHub 发布说明：
+https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md
 
 最新条目在顶部。如果顶部部分标记为 **Unreleased**，则下一个带日期的部分是最新发布版本。条目按**亮点**、**变更**和**修复**分组（需要时还有文档/其他部分）。
 
@@ -443,7 +443,7 @@ https://github.com/omniclaw/omniclaw/tree/main/docs
 我们将构建发布到 **beta**，测试后，一旦构建稳定，就会**将同一版本提升为 `latest`**。这就是为什么 beta 和 stable 可以指向**相同版本**。
 
 查看变更：
-https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md
+https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md
 
 ### 如何安装 beta 版本，beta 和 dev 有什么区别
 

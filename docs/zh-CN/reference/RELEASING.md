@@ -41,9 +41,9 @@ x-i18n:
 - [ ] 确认 `dist/build-info.json` 存在并包含预期的 `commit` 哈希（CLI 横幅在 npm 安装时使用此信息）。
 - [ ] 可选：构建后运行 `npm pack --pack-destination /tmp`；检查 tarball 内容并保留用于 GitHub 发布（**不要**提交它）。
 
-3. **变更日志与文档**
+3. **发布说明与文档**
 
-- [ ] 更新 `CHANGELOG.md`，包含面向用户的重点内容（如文件不存在则创建）；条目按版本严格降序排列。
+- [ ] 更新 `RELEASE_NOTES.md`，包含面向用户的重点内容；条目按版本严格降序排列。
 - [ ] 确保 README 中的示例/参数与当前 CLI 行为一致（特别是新命令或选项）。
 
 4. **验证**
@@ -90,7 +90,7 @@ x-i18n:
 7. **GitHub 发布 + appcast**
 
 - [ ] 打标签并推送：`git tag vX.Y.Z && git push origin vX.Y.Z`（或 `git push --tags`）。
-- [ ] 为 `vX.Y.Z` 创建/更新 GitHub 发布，**标题为 `omniclaw X.Y.Z`**（不仅仅是标签）；正文应包含该版本的**完整**变更日志部分（亮点 + 变更 + 修复），内联展示（不使用裸链接），且**正文中不得重复标题**。
+- [ ] 为 `vX.Y.Z` 创建/更新 GitHub 发布，**标题为 `omniclaw X.Y.Z`**（不仅仅是标签）；正文应包含该版本的**完整**发布说明部分（亮点 + 变更 + 修复），内联展示（不使用裸链接），且**正文中不得重复标题**。
 - [ ] 附加产物：`npm pack` tarball（可选）、`OmniClaw-X.Y.Z.zip` 和 `OmniClaw-X.Y.Z.dSYM.zip`（如已生成）。
 - [ ] 提交更新后的 `appcast.xml` 并推送（Sparkle 从 main 分支获取）。
 - [ ] 从一个干净的临时目录（无 `package.json`）运行 `npx -y omniclaw@X.Y.Z send --help` 以确认安装/CLI 入口点正常工作。

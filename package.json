@@ -9,7 +9,7 @@
     "omniclaw": "omniclaw.mjs"
   },
   "files": [
-    "CHANGELOG.md",
+    "RELEASE_NOTES.md",
     "LICENSE",
     "omniclaw.mjs",
     "README-header.png",

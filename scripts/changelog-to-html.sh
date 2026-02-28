@@ -2,29 +2,36 @@
 set -euo pipefail
 
 VERSION=${1:-}
-CHANGELOG_FILE=${2:-}
+NOTES_FILE=${2:-}
+RELEASE_NOTES_URL="https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md"
 
 if [[ -z "$VERSION" ]]; then
-  echo "Usage: $0 <version> [changelog_file]" >&2
+  echo "Usage: $0 <version> [release_notes_file]" >&2
   exit 1
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-if [[ -z "$CHANGELOG_FILE" ]]; then
-  if [[ -f "$SCRIPT_DIR/../CHANGELOG.md" ]]; then
-    CHANGELOG_FILE="$SCRIPT_DIR/../CHANGELOG.md"
+if [[ -z "$NOTES_FILE" ]]; then
+  if [[ -f "$SCRIPT_DIR/../RELEASE_NOTES.md" ]]; then
+    NOTES_FILE="$SCRIPT_DIR/../RELEASE_NOTES.md"
+  elif [[ -f "RELEASE_NOTES.md" ]]; then
+    NOTES_FILE="RELEASE_NOTES.md"
+  elif [[ -f "../RELEASE_NOTES.md" ]]; then
+    NOTES_FILE="../RELEASE_NOTES.md"
+  elif [[ -f "$SCRIPT_DIR/../CHANGELOG.md" ]]; then
+    NOTES_FILE="$SCRIPT_DIR/../CHANGELOG.md"
   elif [[ -f "CHANGELOG.md" ]]; then
-    CHANGELOG_FILE="CHANGELOG.md"
+    NOTES_FILE="CHANGELOG.md"
   elif [[ -f "../CHANGELOG.md" ]]; then
-    CHANGELOG_FILE="../CHANGELOG.md"
+    NOTES_FILE="../CHANGELOG.md"
   else
-    echo "Error: Could not find CHANGELOG.md" >&2
+    echo "Error: Could not find RELEASE_NOTES.md (or legacy CHANGELOG.md)" >&2
     exit 1
   fi
 fi
 
-if [[ ! -f "$CHANGELOG_FILE" ]]; then
-  echo "Error: Changelog file '$CHANGELOG_FILE' not found" >&2
+if [[ ! -f "$NOTES_FILE" ]]; then
+  echo "Error: Release notes file '$NOTES_FILE' not found" >&2
   exit 1
 fi
 
@@ -55,11 +62,11 @@ markdown_to_html() {
   echo "$text"
 }
 
-version_content=$(extract_version_section "$VERSION" "$CHANGELOG_FILE")
+version_content=$(extract_version_section "$VERSION" "$NOTES_FILE")
 if [[ -z "$version_content" ]]; then
   echo "<h2>OmniClaw $VERSION</h2>"
   echo "<p>Latest OmniClaw update.</p>"
-  echo "<p><a href=\"https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md\">View full changelog</a></p>"
+  echo "<p><a href=\"$RELEASE_NOTES_URL\">View full release notes</a></p>"
   exit 0
 fi
 
@@ -88,4 +95,4 @@ if [[ "$in_list" == true ]]; then
   echo "</ul>"
 fi
 
-echo "<p><a href=\"https://github.com/omniclaw/omniclaw/blob/main/CHANGELOG.md\">View full changelog</a></p>"
+echo "<p><a href=\"$RELEASE_NOTES_URL\">View full release notes</a></p>"

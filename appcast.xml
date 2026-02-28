@@ -64,7 +64,7 @@
 <li>Security: harden web tool content wrapping + file parsing safeguards. (#4058) Thanks @VACInc.</li>
 <li>Security: enforce Twitch <code>allowFrom</code> allowlist gating (deny non-allowlisted senders). Thanks @MegaManSec.</li>
 </ul>
-<p><a href="https://github.com/openclaw/openclaw/blob/main/CHANGELOG.md">View full changelog</a></p>
+<p><a href="https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md">View full release notes</a></p>
 ]]></description>
             <enclosure url="https://github.com/openclaw/openclaw/releases/download/v2026.2.1/OpenClaw-2026.2.1.zip" length="22458919" type="application/octet-stream" sparkle:edSignature="kA/8VQlVdtYphcB1iuFrhWczwWKgkVZMfDfQ7T9WD405D8JKTv5CZ1n8lstIVkpk4xog3UhrfaaoTG8Bf8DMAQ=="/>
         </item>
@@ -109,7 +109,7 @@
 <li>OAuth: skip expired-token warnings when refresh tokens are still valid. (#4593)</li>
 <li>Build: skip redundant UI install step in Dockerfile. (#4584) Thanks @obviyus.</li>
 </ul>
-<p><a href="https://github.com/openclaw/openclaw/blob/main/CHANGELOG.md">View full changelog</a></p>
+<p><a href="https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md">View full release notes</a></p>
 ]]></description>
             <enclosure url="https://github.com/openclaw/openclaw/releases/download/v2026.1.30/OpenClaw-2026.1.30.zip" length="22458594" type="application/octet-stream" sparkle:edSignature="77/GuEcruKGgu2CJyMq+OVwzaJ2v1VzRQC9NmOirKO3uH5Nn5HaoouwrOHnOanrzlD4OvPW0FS5GH2E4Ntu4CQ=="/>
         </item>
@@ -241,7 +241,7 @@ Status: stable.
 <li>Gateway: treat loopback + non-local Host connections as remote unless trusted proxy headers are present.</li>
 <li>Onboarding: remove unsupported gateway auth "off" choice from onboarding/configure flows and CLI flags.</li>
 </ul>
-<p><a href="https://github.com/openclaw/openclaw/blob/main/CHANGELOG.md">View full changelog</a></p>
+<p><a href="https://github.com/omniclaw/omniclaw/blob/main/RELEASE_NOTES.md">View full release notes</a></p>
 ]]></description>
             <enclosure url="https://github.com/openclaw/openclaw/releases/download/v2026.1.29/OpenClaw-2026.1.29.zip" length="22458204" type="application/octet-stream" sparkle:edSignature="HqHwZHQyG/CEfBuQnQ/RffJQPKpSbCVrho9C6rgt93S5ek4AH6hUhB3BBKY8sbX1IVFATKK5QZZNE0YPAf7eBw=="/>
         </item>
